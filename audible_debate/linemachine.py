@@ -100,6 +100,9 @@ class LineMachineTTS:
                         voice=self.voice, analysis=analyze_wav(out_path))
 
 
+LONG_TURN_FACTOR = 0.85
+
+
 def check_voice(voice: str, out_path: Path, text: str, base_url: str = DEFAULT_URL) -> dict:
     """Silent check (no playback): synthesize one line, report WAV facts and a measured speaking rate."""
     try:
@@ -110,7 +113,10 @@ def check_voice(voice: str, out_path: Path, text: str, base_url: str = DEFAULT_U
     # the Line Machine adds a short lead-in of silence; subtract leading quiet from the rate estimate
     speech_s = max(0.5, r.duration_s - _leading_silence_s(out_path))
     return {"voice": voice, "ok": bool(r.analysis and r.analysis["speech_like"]), "duration_s": round(r.duration_s, 2),
-            "synth_s": round(r.synth_time_s, 2), "sample_rate": r.sample_rate, "words_per_second": round(words / speech_s, 2),
+            "synth_s": round(r.synth_time_s, 2), "sample_rate": r.sample_rate,
+            # one short line has no sentence pauses; long turns measured 0.85x its rate (2026-11-14 live run)
+            "words_per_second": round(LONG_TURN_FACTOR * words / speech_s, 2),
+            "words_per_second_check_line": round(words / speech_s, 2),
             "analysis": r.analysis}
 
 

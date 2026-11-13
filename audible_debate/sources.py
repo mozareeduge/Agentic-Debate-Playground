@@ -41,6 +41,7 @@ class Source:
     router_models: list = field(default_factory=list)
     local: bool = False
     note: str = ""
+    preferred_models: list = field(default_factory=list)
 
     def api_key(self) -> str | None:
         if self.key_env and os.environ.get(self.key_env):
@@ -55,7 +56,7 @@ class Source:
     def public(self) -> dict:
         return {"id": self.id, "label": self.label, "base_url": self.base_url, "local": self.local,
                 "key_env": self.key_env, "needs_key": self.needs_key(), "has_key": bool(self.api_key()),
-                "note": self.note}
+                "note": self.note, "preferred_models": list(self.preferred_models)}
 
 
 def _read_key_file(spec: str, name: str | None) -> str | None:

@@ -5,6 +5,9 @@
   python -m audible_debate discover [URL ...]                  # read-only probe of local endpoints
   python -m audible_debate verify sessions/<id>                # replay events, check hashes/ceiling
   python -m audible_debate metrics sessions/<id>
+  python -m audible_debate serve [--port 4797] [--silent]   # the control page (START-DEBATE.bat runs this)
+  python -m audible_debate sources                         # live list of free model sources and models
+  python -m audible_debate voices                          # Line Machine voices (if it is running)
 
 During `run`, type a command and press Enter:
   start  pause  resume  stop  save  new  quit   (single letters: g p r s v n q)
@@ -74,7 +77,7 @@ def build_controller(a) -> tuple[Controller, SessionConfig]:
                         gap_seconds=a.gap, history_turns=a.history,
                         llm_params={"temperature": a.temperature, "max_tokens": a.max_tokens,
                                     **({"seed": a.seed} if a.seed is not None else {})},
-                        llm_timeout_s=a.timeout,
+                        llm_timeout_s=a.timeout, lookahead=a.lookahead, preroll_min=a.preroll,
                         knowledge={"A": _knowledge(a.sources_a), "B": _knowledge(a.sources_b)})
     return ctl, cfg
 
@@ -175,6 +178,13 @@ def main(argv=None):
     r.add_argument("--sessions", default="sessions")
     r.add_argument("--start-now", action="store_true", help="operator pre-authorises Start (logged)")
     r.add_argument("--exit-when-done", action="store_true")
+    r.add_argument("--lookahead", type=int, default=0, help="turns written ahead of what is heard (0 = serial v0)")
+    r.add_argument("--preroll", type=int, default=2, help="voices ready before the first sound (pipeline)")
+    sv = sub.add_parser("serve")
+    sv.add_argument("--port", type=int, default=4797)
+    sv.add_argument("--silent", action="store_true", help="default to silent rehearsal (agents/tests)")
+    sub.add_parser("sources")
+    sub.add_parser("voices")
     d = sub.add_parser("discover")
     d.add_argument("endpoints", nargs="*", default=["http://localhost:1234", "http://127.0.0.1:1234"])
     v = sub.add_parser("verify")
@@ -189,6 +199,17 @@ def main(argv=None):
         except (LLMError, ValueError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
+    if a.cmd == "serve":
+        from .web import serve
+        return serve(a.port, "silent" if a.silent else "audible")
+    if a.cmd == "sources":
+        from .sources import discover_all
+        print(json.dumps(discover_all(), indent=2))
+        return 0
+    if a.cmd == "voices":
+        from .linemachine import list_voices
+        print(json.dumps(list_voices(), indent=2, ensure_ascii=False))
+        return 0
     if a.cmd == "discover":
         print(json.dumps(discover(a.endpoints), indent=2))
         return 0
@@ -197,7 +218,7 @@ def main(argv=None):
         print(json.dumps(res, indent=2))
         return 0 if res["ok"] else 1
     if a.cmd == "metrics":
-        turns = [json.loads(p.read_text()) for p in sorted(Path(a.session_dir, "turns").glob("*.json"))]
+        turns = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(Path(a.session_dir, "turns").glob("*.json"))]
         print(json.dumps(run_metrics(turns), indent=2))
         return 0
 

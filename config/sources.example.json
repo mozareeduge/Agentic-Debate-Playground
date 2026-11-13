@@ -1,18 +1,68 @@
 {
   "_comment": "Free model sources. Copy to config/sources.json (gitignored) to change it locally. No keys here: keys come from key_env or key_file.",
   "sources": [
-    {"id": "kilo-free", "label": "Kilo · free", "base_url": "http://127.0.0.1:28124/v1",
-     "free": {"suffix": [":free", "/free"]}, "router_models": ["kilo/kilo-auto/free"],
-     "note": "Local Kilo gateway; free models, no key."},
-    {"id": "opencode-zen-free", "label": "OpenCode Zen · free (9router)", "base_url": "http://127.0.0.1:20128/v1",
-     "key_env": "HERMES_CUSTOM_ROUTER_API_KEY", "free": {"suffix": ["-free"]},
-     "note": "9router lane; needs the 9router key."},
-    {"id": "cline-free", "label": "Cline · free (9router)", "base_url": "http://127.0.0.1:20128/v1",
-     "key_env": "HERMES_CUSTOM_ROUTER_API_KEY", "free": {"suffix": [":free"], "allow": ["cl/cline-free/solar-mini4", "cl/cline-free/nemotron-3.5-super-vl"]},
-     "note": "9router lane; needs the 9router key."},
-    {"id": "lmstudio", "label": "LM Studio (this laptop)", "base_url": "http://127.0.0.1:1234/v1",
-     "free": "all", "local": true, "note": "Runs only when LM Studio's local server is on."},
-    {"id": "ollama", "label": "Ollama (this laptop)", "base_url": "http://127.0.0.1:11434/v1",
-     "free": "all", "local": true, "note": "Runs only when Ollama is installed and running."}
+    {
+      "id": "kilo-free",
+      "label": "Kilo · free",
+      "base_url": "http://127.0.0.1:28124/v1",
+      "free": {
+        "suffix": [
+          ":free",
+          "/free"
+        ]
+      },
+      "router_models": [
+        "kilo/kilo-auto/free"
+      ],
+      "note": "Local Kilo gateway; free models, no key. Preferred: fastest valid JSON in the 2026-11-14 probe (5.8 s).",
+      "preferred_models": [
+        "kilo/nvidia/nemotron-3-ultra-550b-a55b:free",
+        "kilo/nvidia/nemotron-3.5-super-vl:free"
+      ]
+    },
+    {
+      "id": "opencode-zen-free",
+      "label": "OpenCode Zen · free (9router)",
+      "base_url": "http://127.0.0.1:20128/v1",
+      "key_env": "HERMES_CUSTOM_ROUTER_API_KEY",
+      "free": {
+        "suffix": [
+          "-free"
+        ]
+      },
+      "note": "9router lane; needs the 9router key."
+    },
+    {
+      "id": "cline-free",
+      "label": "Cline · free (9router)",
+      "base_url": "http://127.0.0.1:20128/v1",
+      "key_env": "HERMES_CUSTOM_ROUTER_API_KEY",
+      "free": {
+        "suffix": [
+          ":free"
+        ],
+        "allow": [
+          "cl/cline-free/solar-mini4",
+          "cl/cline-free/nemotron-3.5-super-vl"
+        ]
+      },
+      "note": "9router lane; needs the 9router key."
+    },
+    {
+      "id": "lmstudio",
+      "label": "LM Studio (this laptop)",
+      "base_url": "http://127.0.0.1:1234/v1",
+      "free": "all",
+      "local": true,
+      "note": "Runs only when LM Studio's local server is on."
+    },
+    {
+      "id": "ollama",
+      "label": "Ollama (this laptop)",
+      "base_url": "http://127.0.0.1:11434/v1",
+      "free": "all",
+      "local": true,
+      "note": "Runs only when Ollama is installed and running."
+    }
   ]
 }

@@ -39,7 +39,7 @@ EXAMINER = Persona(
     prohibitions=(
         "Never imply you read a source unless it appears in YOUR SOURCES below.",
     ),
-    speaking_rate_wps=2.3,
+    speaking_rate_wps=2.64,  # measured 2026-11-14: Line Machine en_david, 6-turn live run (was 2.3, a guess)
     voice_note="lower, dry, measured, restrained dynamics; pauses after enumerations",
 )
 
@@ -55,7 +55,7 @@ REFRAMER = Persona(
     prohibitions=(
         "An analogy is an analogy, never cited evidence; mark it as such (analogy=true).",
     ),
-    speaking_rate_wps=2.6,
+    speaking_rate_wps=2.54,  # measured 2026-11-14: Line Machine en_zira, 6-turn live run (was 2.6, a guess)
     voice_note="brighter, elastic pace, small deliberate hesitations, variable contours",
 )
 

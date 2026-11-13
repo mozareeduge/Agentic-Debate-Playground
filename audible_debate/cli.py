@@ -8,6 +8,9 @@
 
 During `run`, type a command and press Enter:
   start  pause  resume  stop  save  new  quit   (single letters: g p r s v n q)
+  cue <technique> [note]   constraint on the NEXT turn only, e.g. `cue forced_compression`,
+                           `cue fragment_seeding the river forgets its bed`   (`cue` alone lists techniques)
+  hold <seconds>           designed extra silence before the next turn (logged as designed, not latency)
 Nothing starts until the operator types `start` (or passes --start-now, which is logged as such).
 """
 
@@ -25,6 +28,7 @@ from .controller import Controller, SessionConfig
 from .knowledge import KnowledgeProfile, load_sources
 from .llm import LLMError, MockAdapter, OpenAICompatAdapter, discover
 from .metrics import run_metrics, verify_session
+from .personas import CUE_TECHNIQUES
 
 DEFAULT_QUESTION = "Can a machine change its mind?"
 ALIASES = {"g": "start", "p": "pause", "r": "resume", "s": "stop", "v": "save", "n": "new", "q": "quit"}
@@ -105,7 +109,8 @@ def cmd_run(a):
         line = sys.stdin.readline()
         if not line:
             break
-        cmd = ALIASES.get(line.strip().lower(), line.strip().lower())
+        parts = line.strip().split(maxsplit=2)
+        cmd = ALIASES.get(parts[0].lower(), parts[0].lower()) if parts else ""
         if not cmd:
             print(f"state={ctl.state} phase={ctl.phase} allowed={fsm.operator_actions(ctl.state)}")
             continue
@@ -113,6 +118,13 @@ def cmd_run(a):
             if cmd == "save":
                 m = ctl.save()
                 print(f"saved {m['turns']} turns -> {ctl.store.dir}")
+            elif cmd == "cue":
+                if len(parts) < 2:
+                    print("techniques: " + ", ".join(sorted(CUE_TECHNIQUES)))
+                else:
+                    ctl.cue(parts[1], parts[2] if len(parts) > 2 else "")
+            elif cmd == "hold":
+                ctl.hold(float(parts[1]) if len(parts) > 1 else 3.0)
             elif cmd in ("start", "pause", "resume", "stop", "new", "quit"):
                 getattr(ctl, cmd)()
                 if cmd == "new":
@@ -123,6 +135,8 @@ def cmd_run(a):
                 print(f"unknown command {cmd!r}; allowed: {fsm.operator_actions(ctl.state)}")
         except fsm.IllegalTransition as e:
             print(f"not allowed: {e}")
+        except ValueError as e:
+            print(f"rejected: {e}")
     if ctl.state != fsm.CLOSED:
         if ctl.state not in (fsm.IDLE,):
             ctl.save()

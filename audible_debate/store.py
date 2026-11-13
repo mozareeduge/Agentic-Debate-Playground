@@ -5,6 +5,7 @@ sessions/<session_id>/
   events.jsonl       every state change, operator action, generation, synthesis and playback fact
   prompts/<turn>.json  exact messages sent to the model for that turn
   turns/<turn>.json  turn record
+  residue.jsonl      material removed from the active route, with reason (rejected outputs, trimmed text, ...)
   audio/<turn>.wav   rendered audio (placeholder audio is labelled as such in the turn record)
   transcript.md, audit.csv, manifest.json   written on Save (rewritten on each Save; events are never rewritten)
 
@@ -51,6 +52,20 @@ class SessionStore:
             }
             self._events.write(json.dumps(rec, ensure_ascii=False) + "\n")
             self._events.flush()
+            return rec
+
+    def residue(self, turn_id: str, kind: str, reason: str, content, reopen: str = "") -> dict:
+        """Preserve material removed from the active route (never deleted).
+
+        kind: invalid_output | over_budget_reply | trimmed_text | ceiling_shortened_text |
+              stale_generation | interrupted_turn
+        """
+        with self._lock:
+            rec = {"turn_id": turn_id, "kind": kind, "reason": reason, "content": content,
+                   "status": "residue", "reopen_condition": reopen,
+                   "t_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="milliseconds")}
+            with open(self.dir / "residue.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
             return rec
 
     def write_json(self, rel: str, obj) -> Path:

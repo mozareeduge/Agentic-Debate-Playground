@@ -16,7 +16,7 @@ from audible_debate.audio import ClockPlayer, SpeechlessTTS, measure_wav
 from audible_debate.controller import Controller, SessionConfig
 from audible_debate.knowledge import KnowledgeProfile, Source
 from audible_debate.llm import Generation, LLMError, MockAdapter, OpenAICompatAdapter
-from audible_debate.metrics import run_metrics, verify_session
+from audible_debate.metrics import run_metrics, smoothing_flags, verify_session
 from audible_debate.schema import ReplyInvalid, parse_reply, trim_to_words
 
 FAST = 0.002  # 1 audible second == 2 ms wall time in tests
@@ -257,6 +257,90 @@ class TestRun(Base):
         ctl.wait(10)
         self.assertEqual(seen, ["Plain words only."])
         ctl.quit()
+
+
+def residue(ctl):
+    p = ctl.store.dir / "residue.jsonl"
+    return [json.loads(l) for l in p.read_text().splitlines()] if p.exists() else []
+
+
+class TestWikiGroundedFeatures(Base):
+    """Features derived from Mozare Wiki concepts (residue, prompt-as-stage-direction,
+    designed vs undesigned ruining, smoothing machine). Candidate design readings."""
+
+    def test_T13_residue_preserves_removed_material(self):
+        long = " ".join(["This sentence is padding for the ceiling test."] * 60)
+        ctl = self.make(llm=ScriptedLLM([reply_json(long)]), turns=1, max_turn_seconds=30)
+        ctl.start()
+        self.assertEqual(ctl.wait(20), fsm.COMPLETED)
+        kinds = [r["kind"] for r in residue(ctl)]
+        self.assertEqual(kinds.count("over_budget_reply"), 2)
+        self.assertIn("trimmed_text", kinds)
+        self.assertTrue(all(r["reason"] and r["status"] == "residue" for r in residue(ctl)))
+        ctl.save()
+        ctl.quit()
+        self.assertEqual(verify_session(ctl.store.dir)["residue_records"], len(kinds))
+
+    def test_T13b_invalid_and_interrupted_are_residue(self):
+        ctl = self.make(llm=ScriptedLLM(["nope", reply_json("A valid opening sentence that will be cut short by the operator stop.")]),
+                        time_scale=0.05)
+        ctl.start()
+        self.assertTrue(wait_for(lambda: ctl.phase == "playing" and ctl.player.position_s > 0.5))
+        ctl.stop()
+        ctl.wait(5)
+        kinds = [r["kind"] for r in residue(ctl)]
+        self.assertEqual(kinds, ["invalid_output", "interrupted_turn"])
+        ctl.quit()
+
+    def test_T14_operator_cue_applies_to_next_turn_only(self):
+        llm = ScriptedLLM([reply_json("One."), reply_json("Two."), reply_json("Three.")], latency=0.05)
+        ctl = self.make(llm=llm, turns=3, time_scale=0.05)
+        ctl.cue("forced_compression")  # placed while READY: applies to turn 1
+        ctl.start()
+        self.assertEqual(ctl.wait(10), fsm.COMPLETED)
+        prompts = [c[1]["content"] for c in llm.calls]
+        self.assertIn("OPERATOR CUE: This turn: at most two sentences", prompts[0])
+        self.assertNotIn("OPERATOR CUE", prompts[1])
+        self.assertEqual(ctl.turns[0]["operator_cue"]["technique"], "forced_compression")
+        self.assertIsNone(ctl.turns[1]["operator_cue"])
+        self.assertIn('"action": "cue"', (ctl.store.dir / "events.jsonl").read_text())
+        with self.assertRaises(ValueError):
+            ctl.cue("make_it_poetic")
+        with self.assertRaises(ValueError):
+            ctl.cue("fragment_seeding")  # needs a note
+        self.assertIn("SCORE POSITION: ROUND 1 OF 2 (opening)", prompts[0])
+        self.assertIn("ROUND 2 OF 2 (closing)", prompts[2])
+        self.assertIn("reconciling summary", llm.calls[0][0]["content"])
+        ctl.quit()
+
+    def test_T15_designed_silence_vs_undesigned_wait(self):
+        llm = ScriptedLLM([reply_json("Short turn.")], latency=0.25)
+        ctl = self.make(llm=llm, turns=2, gap_seconds=1.0, time_scale=0.01)
+        ctl.hold(4)
+        ctl.start()
+        self.assertTrue(wait_for(lambda: ctl.phase == "generating"))
+        ctl.pause()
+        time.sleep(0.4)  # paused time must not count as machine latency
+        ctl.resume()
+        self.assertEqual(ctl.wait(10), fsm.COMPLETED)
+        t1, t2 = ctl.turns
+        self.assertEqual(t1["designed_silence_s"], 4.0)   # operator hold before the opening
+        self.assertEqual(t2["designed_silence_s"], 1.0)   # the regular pulse
+        # turn 1: generation ran while paused, so the 0.4 s pause is excluded from the wait
+        self.assertLess(t1["undesigned_wait_s"], 0.2)
+        # turn 2: no pause, so the 0.25 s model latency is counted as undesigned wait
+        self.assertGreaterEqual(t2["undesigned_wait_s"], 0.24)
+        beat = run_metrics(ctl.turns)["beat"]
+        self.assertIsNotNone(beat["max_undesigned_wait_s"])
+        with self.assertRaises(ValueError):
+            ctl.hold(0)
+        ctl.quit()
+
+    def test_T16_smoothing_flags(self):
+        self.assertEqual(smoothing_flags("In conclusion, we both agree that minds change."), ["closure"])
+        self.assertEqual(smoothing_flags("As an AI, I cannot say."), ["meta_commentary"])
+        self.assertEqual(smoothing_flags("Firstly, consider memory. Secondly, consider will."), ["taxonomy"])
+        self.assertEqual(smoothing_flags("Show me the observation that would separate them."), [])
 
 
 if __name__ == "__main__":

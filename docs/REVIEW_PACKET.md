@@ -11,8 +11,8 @@ This packet combines the six return items from handoff §13. It is honest about 
 | Component | Status in build session | Evidence |
 |---|---|---|
 | `Agentic-Debate-Playground` repo | **Present** (empty: only README) | `git log`: single "Initial commit" |
-| `mozare-wiki` repo | **Present**, read-only for this work | governance repo; no Studio/Audial code; untouched |
-| Mozare Studio, Audial/SuperCollider, Visor/Hydra | **Absent** | not in session; no repo access granted |
+| `mozare-wiki` repo | **Present**, read-only **context** for this work | practice, methods and aesthetics; see [`AESTHETICS_AND_METHOD.md`](AESTHETICS_AND_METHOD.md); untouched |
+| Mozare Studio, Audial/SuperCollider, Visor/Hydra | **Absent as code**; existence **owner-stated** in the wiki (2026-11-05 intermedia statement; ANJA used OSC cue bridges) | not in session; no repo access granted |
 | Core (M-64 / Contract 1.9), PocketBase, MAWS | **Absent**: reported only | handoff §5 "prior reported" |
 | Hermes / Jimmy delegation framework | **Absent** | — |
 | LM Studio endpoint | **Absent** | `discover http://127.0.0.1:1234` → connection refused |
@@ -44,6 +44,11 @@ This packet combines the six return items from handoff §13. It is honest about 
 | P: speechless fallback | `SpeechlessTTS` silent WAVs, labelled in every turn, transcript and manifest |
 | P: mock adapter | `MockAdapter`, labelled "MOCK" in transcript and manifest |
 | P: three debug measures | `metrics.run_metrics`: opponent reference, lexicon/Jaccard, concession/shift/uncertainty |
+| Wiki: prompt as stage direction | the per-turn cue carries score position and time budget; live operator `cue <technique>` on the next turn only |
+| Wiki: token-distribution techniques | Meta-Commentary Ban and Anti-Taxonomy in the shared rules; 7 techniques available as operator cues (untested in speech) |
+| Wiki: smoothing machine / not obliged to soothe | no reconciling close; per-turn closure/meta/taxonomy flags; A/B convergence first round vs last |
+| Wiki: residue | every removed output kept in `residue.jsonl` with a reason |
+| Wiki: designed vs undesigned ruining (owner-stated, sound work) | designed silence (gap + operator `hold`) recorded separately from latency (`undesigned_wait_s`, pauses excluded) |
 
 **Deviations from the handoff, and why**
 
@@ -69,7 +74,7 @@ These numbers describe a scripted mock. They say nothing about a real model.
 
 ```
 $ python -m unittest discover -s tests -v
-Ran 18 tests ... OK            (5 consecutive runs: OK ×5, ResourceWarnings promoted to errors)
+Ran 23 tests ... OK            (5 consecutive runs: OK ×5, ResourceWarnings promoted to errors)
 ```
 
 The handoff's T01–T14 table was lost in transfer. The IDs below are **mine**, derived from the prose of §§5–6, 10 and 12:
@@ -88,6 +93,10 @@ The handoff's T01–T14 table was lost in transfer. The IDs below are **mine**, 
 | T10 | New opens a fresh session directory; the old one is preserved | pass |
 | T11 | Ceiling outside 30–120 s rejected | pass |
 | T12 | TTS receives only the cleaned utterance (no JSON, no source IDs) | pass |
+| T13 | Residue: 2 over-budget replies + trimmed text preserved with reasons; invalid output + interrupted turn preserved | pass |
+| T14 | Operator cue reaches the next prompt only; logged; unknown technique / missing note rejected; score position and no-closure rule present | pass |
+| T15 | Hold adds designed silence; pause time is excluded from undesigned wait; model latency is counted | pass |
+| T16 | Smoothing flags: closure, meta-commentary, taxonomy; clean sentence unflagged | pass |
 | + | FSM legality, no autoplay after stop/error, schema validation, sentence trimming | pass |
 
 Also exercised by hand: the interactive CLI piped `start, pause, <status>, resume, stop, resume (refused: not allowed in stopped), save, quit` and produced the expected states.
@@ -96,7 +105,7 @@ Also exercised by hand: the interactive CLI piped `start, pause, <status>, resum
 
 ## 5. Change log
 
-New files only, all in `Agentic-Debate-Playground`: `audible_debate/*.py` (10 modules), `tests/test_debate.py`, `examples/sources_a.json`, `docs/REVIEW_PACKET.md`, `README.md` (rewritten from a one-line title), `.gitignore`.
+New files only, all in `Agentic-Debate-Playground`: `audible_debate/*.py` (10 modules), `tests/test_debate.py`, `examples/sources_a.json`, `docs/REVIEW_PACKET.md`, `docs/AESTHETICS_AND_METHOD.md`, `README.md` (rewritten from a one-line title), `.gitignore`.
 `mozare-wiki`: **no changes.** No Studio, Core, provider, device or projector state was touched. Rollback is to delete the branch.
 
 ## 6. Owner review: open decisions only
@@ -108,6 +117,7 @@ New files only, all in `Agentic-Debate-Playground`: `audible_debate/*.py` (10 mo
 5. **Persona wording.** `personas.py` is my draft in place of the lost §8 prompts. Please revise or approve.
 6. **Duration.** Keep the 120 s ceiling, or use the 45–75 s pilot suggestion? Also the total length and the inter-turn gap (1.5 s).
 7. **Exposure.** Should the audience see the transcript, citations or clock, and should errors be audible?
+8. **Wiki-grounded readings.** Four further questions (pulse and silence, designed ending, which cues are for performance, closure flags) are in [`AESTHETICS_AND_METHOD.md`](AESTHETICS_AND_METHOD.md#questions-this-adds-for-the-owner).
 
 ### Next exact operation (on the Windows host, by Jimmy or the owner)
 

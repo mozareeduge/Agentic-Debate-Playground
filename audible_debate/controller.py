@@ -11,6 +11,16 @@ Concurrency contract
     or playback that finishes under an older epoch is discarded and logged
   * pause parks the worker at the next checkpoint; an in-flight model request is
     allowed to return but its result is held until resume (or discarded on stop)
+
+Timing ("on-beat")
+  The inter-turn gap is the designed pulse. Operator `hold` adds designed silence.
+  Time spent waiting for the model and the synthesizer is recorded separately as
+  `undesigned_wait_s`, so a reviewer can tell designed silence from latency.
+  A failure is reported as a failure, never relabelled as a designed gesture.
+
+Residue
+  Every output removed from the active route (invalid, over budget, trimmed,
+  shortened for the ceiling, discarded after Stop) is kept in residue.jsonl.
 """
 
 from __future__ import annotations
@@ -26,7 +36,7 @@ from . import fsm
 from .audio import ClockPlayer, PlaybackInterrupted, TTSError
 from .knowledge import KnowledgeProfile
 from .llm import LLMError
-from .personas import PERSONAS, system_prompt
+from .personas import PERSONAS, cue_instruction, system_prompt
 from .schema import ReplyInvalid, drop_last_sentence, parse_reply, trim_to_words, word_count
 from .store import SessionStore
 
@@ -85,6 +95,10 @@ class Controller:
         self._resume.set()
         self._worker: threading.Thread | None = None
         self.last_error: str | None = None
+        self.pending_cue: dict | None = None
+        self.pending_hold: float = 0.0
+        self._paused_wall = 0.0
+        self._pause_t: float | None = None
 
     # ------------------------------------------------------------ events
     def _emit(self, type_: str, **data):
@@ -141,12 +155,16 @@ class Controller:
     def pause(self):
         with self._lock:
             self._act("pause", phase=self.phase, position_s=round(self.player.position_s, 3))
+            self._pause_t = time.monotonic()
             self._resume.clear()
             self.player.pause()
 
     def resume(self):
         with self._lock:
             self._act("resume", phase=self.phase, position_s=round(self.player.position_s, 3))
+            if self._pause_t is not None:
+                self._paused_wall += time.monotonic() - self._pause_t
+                self._pause_t = None
             self.player.resume()
             self._resume.set()
 
@@ -155,6 +173,27 @@ class Controller:
             self._act("stop", phase=self.phase, position_s=round(self.player.position_s, 3))
             self.player.stop()
             self._resume.set()  # unblock a paused worker so it can observe the new epoch and exit
+
+    def cue(self, technique: str, note: str = ""):
+        """Place a constraint on the NEXT turn only (replaces any unconsumed cue; both are logged)."""
+        instruction = cue_instruction(technique, note)
+        with self._lock:
+            replaced = self.pending_cue
+            self._act("cue", technique=technique, note=note, instruction=instruction,
+                      replaced=replaced["technique"] if replaced else None)
+            self.pending_cue = {"technique": technique, "note": note, "instruction": instruction}
+
+    def hold(self, seconds: float):
+        """Add designed silence before the next turn (0–30 s; accumulates until consumed)."""
+        if not (0 < seconds <= 30):
+            raise ValueError("hold must be within (0, 30] seconds")
+        with self._lock:
+            self._act("hold", seconds=seconds)
+            self.pending_hold = min(30.0, self.pending_hold + seconds)
+
+    def _paused_total(self) -> float:
+        extra = time.monotonic() - self._pause_t if self._pause_t is not None else 0.0
+        return self._paused_wall + extra
 
     def save(self) -> dict:
         with self._lock:
@@ -233,12 +272,16 @@ class Controller:
         try:
             for i in range(cfg.turns):
                 speaker = order[i % 2]
-                turn = self._do_turn(epoch, i, speaker)
+                with self._lock:
+                    hold, self.pending_hold = self.pending_hold, 0.0
+                designed = (cfg.gap_seconds if i > 0 else 0.0) + hold
+                if designed > 0:
+                    self._emit("silence", designed_s=designed, operator_hold_s=hold, before_turn=i + 1)
+                    self._wait_gap(epoch, designed)
+                turn = self._do_turn(epoch, i, speaker, designed)
                 if turn["reply"]["move"] == "end":
                     self._emit("scene_end_requested", turn_id=turn["turn_id"], speaker=speaker)
                     break
-                if i < cfg.turns - 1:
-                    self._wait_gap(epoch, cfg.gap_seconds)
             with self._lock:
                 if self.epoch == epoch:
                     self._act("complete", turns=len(self.turns))
@@ -256,7 +299,13 @@ class Controller:
                     self._act("fail", phase=self.phase, error=self.last_error)
             raise
 
-    def _messages(self, index: int, speaker: str) -> tuple[list[dict], list[str], int]:
+    def _score_position(self, index: int) -> str:
+        rounds = (self.config.turns + 1) // 2
+        r = index // 2 + 1
+        phase = "opening" if index < 2 else ("closing" if r == rounds else "middle")
+        return f"ROUND {r} OF {rounds} ({phase}); turn {index + 1} of {self.config.turns}"
+
+    def _messages(self, index: int, speaker: str, cue: dict | None = None) -> tuple[list[dict], list[str], int]:
         cfg = self.config
         persona = PERSONAS[speaker]
         kp: KnowledgeProfile = cfg.knowledge[speaker]
@@ -266,32 +315,40 @@ class Controller:
         opp = next((t for t in reversed(played) if t["speaker"] != speaker), None)
         earlier = [t for t in history if t is not opp]
         hist_txt = "\n".join(f"[{t['turn_id']} {t['speaker']}] {t['reply']['utterance']}" for t in earlier)
-        user = [f"QUESTION: {cfg.question}", f"TURN INDEX: {index}", f"YOU ARE: performer {speaker}", ""]
+        user = [f"QUESTION: {cfg.question}", f"TURN INDEX: {index}", f"YOU ARE: performer {speaker}",
+                f"SCORE POSITION: {self._score_position(index)}", ""]
         if hist_txt:
             user += ["EARLIER EXCHANGE (most recent last):", hist_txt, ""]
         if opp:
             user += [f"OPPONENT LAST TURN [{opp['turn_id']}]:", opp["reply"]["utterance"], ""]
         else:
             user += ["You open the exchange. There is no previous turn.", ""]
-        user += [kp.prompt_block(), "",
-                 f"WORD BUDGET: at most {budget} words in the utterance.",
+        user += [kp.prompt_block(), ""]
+        if cue:
+            user += [f"OPERATOR CUE: {cue['instruction']}", ""]
+        user += [f"WORD BUDGET: at most {budget} words in the utterance "
+                 f"(about {int(cfg.max_turn_seconds)} seconds of speech at most).",
                  "Reply with one JSON object with keys: utterance, move, addresses, position_shift, uncertainty, source_ids, analogy."]
         msgs = [{"role": "system", "content": system_prompt(persona)}, {"role": "user", "content": "\n".join(user)}]
         prior = [t["turn_id"] for t in history]
         return msgs, prior, budget
 
-    def _do_turn(self, epoch: int, index: int, speaker: str) -> dict:
+    def _do_turn(self, epoch: int, index: int, speaker: str, designed_silence_s: float = 0.0) -> dict:
         cfg = self.config
         persona = PERSONAS[speaker]
         kp: KnowledgeProfile = cfg.knowledge[speaker]
         turn_id = f"t{index + 1:02d}{speaker}"
-        msgs, prior_ids, budget = self._messages(index, speaker)
+        t_start, p_start = time.monotonic(), self._paused_total()
+        with self._lock:
+            cue, self.pending_cue = self.pending_cue, None
+        msgs, prior_ids, budget = self._messages(index, speaker, cue)
         prompt_path = self.store.write_json(f"prompts/{turn_id}.json", msgs)
         turn = {"turn_id": turn_id, "session_id": self.store.session_id, "index": index, "speaker": speaker,
                 "persona": persona.name, "prior_turn_ids": prior_ids, "sources_offered": sorted(kp.ids),
                 "knowledge_mode": kp.mode, "prompt_file": str(prompt_path.relative_to(self.store.dir)),
                 "word_budget": budget, "regenerations": 0, "trimmed": False, "status": "generating",
-                "invalid_outputs": []}
+                "invalid_outputs": [], "operator_cue": cue, "designed_silence_s": designed_silence_s,
+                "score_position": self._score_position(index)}
 
         # ---- generate (with validation and budget-driven regeneration)
         self._checkpoint(epoch, "generating")
@@ -300,18 +357,24 @@ class Controller:
         for attempt in range(cfg.max_regenerations + 1):
             gen = self.llm.generate(msgs, cfg.llm_params, cfg.llm_timeout_s)
             if self.epoch != epoch:
+                self.store.residue(turn_id, "stale_generation", "generation returned after Stop/New/Quit", gen.raw,
+                                   reopen="never replayed into a later session")
                 self._emit("stale_generation_discarded", turn_id=turn_id)
                 raise Cancelled()
             try:
                 reply = parse_reply(gen.raw, kp.ids)
             except ReplyInvalid as e:
                 turn["invalid_outputs"].append({"attempt": attempt, "error": str(e), "raw": gen.raw[:2000]})
+                self.store.residue(turn_id, "invalid_output", f"attempt {attempt}: {e}", gen.raw)
                 self._emit("reply_invalid", turn_id=turn_id, attempt=attempt, error=str(e))
                 turn["regenerations"] = attempt + 1
                 reply = None
                 continue
             if word_count(reply.utterance) > budget and attempt < cfg.max_regenerations:
                 self._emit("over_word_budget", turn_id=turn_id, words=word_count(reply.utterance), budget=budget)
+                self.store.residue(turn_id, "over_budget_reply",
+                                   f"attempt {attempt}: {word_count(reply.utterance)} words > budget {budget}; regenerated",
+                                   reply.to_dict())
                 turn["regenerations"] = attempt + 1
                 msgs[-1]["content"] += f"\nYour previous reply had {word_count(reply.utterance)} words. Stay under {budget}."
                 continue
@@ -324,6 +387,8 @@ class Controller:
         if word_count(reply.utterance) > budget:
             reply.utterance = trim_to_words(reply.utterance, budget)
             turn["trimmed"] = True
+            self.store.residue(turn_id, "trimmed_text", f"over word budget {budget} after final attempt; cut at sentence boundary",
+                               turn["original_utterance"][len(reply.utterance):].strip())
         if reply.unverified_citations:
             self._emit("unverified_citation", turn_id=turn_id, ids=reply.unverified_citations)
         self._emit("generate_end", turn_id=turn_id, model=gen.model, latency_s=round(gen.latency_s, 3),
@@ -343,7 +408,11 @@ class Controller:
             self._emit("over_ceiling", turn_id=turn_id, duration_s=round(rendered.duration_s, 3),
                        ceiling_s=cfg.max_turn_seconds, attempt=attempt)
             shorter = drop_last_sentence(text)
-            text = shorter if shorter != text else trim_to_words(text, int(word_count(text) * 0.8))
+            new_text = shorter if shorter != text else trim_to_words(text, int(word_count(text) * 0.8))
+            self.store.residue(turn_id, "ceiling_shortened_text",
+                               f"audio {rendered.duration_s:.2f}s > ceiling {cfg.max_turn_seconds}s",
+                               text[len(new_text):].strip())
+            text = new_text
             turn["trimmed"] = True
         else:
             turn["status"] = "refused_over_ceiling"
@@ -360,6 +429,7 @@ class Controller:
         # ---- play
         self._checkpoint(epoch, "playing")
         turn["status"] = "playing"
+        turn["undesigned_wait_s"] = round((time.monotonic() - t_start) - (self._paused_total() - p_start), 4)
         self.turns.append(turn)
         self._emit("play_begin", turn_id=turn_id, duration_s=round(rendered.duration_s, 3))
         try:
@@ -368,6 +438,8 @@ class Controller:
         except PlaybackInterrupted as e:
             turn["status"] = "stopped_during_playback"
             turn["played_s"] = float(e.args[0]) if e.args else None
+            self.store.residue(turn_id, "interrupted_turn", f"operator stop at {turn['played_s']}s of {rendered.duration_s:.2f}s",
+                               reply.utterance, reopen="only as a new session; never auto-resumed")
             self.store.write_json(f"turns/{turn_id}.json", turn)
             raise Cancelled()
         if self.epoch != epoch:

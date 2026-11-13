@@ -15,7 +15,8 @@ error      a component failed; nothing advances until the operator decides
 closed     the operator quit; terminal
 
 Save is an action, not a state: it is legal everywhere except idle/closed and
-never changes state. Every operator action is recorded as an event by the
+never changes state. `cue` (a constraint on the next turn) and `hold` (designed
+extra silence before the next turn) are likewise state-preserving operator actions. Every operator action is recorded as an event by the
 controller, so the lifecycle can be replayed from the event log.
 """
 
@@ -43,6 +44,9 @@ TRANSITIONS: dict[str, dict[str, str]] = {
     "fail": {RUNNING: ERROR, PAUSED: ERROR},
     "new": {READY: READY, STOPPED: READY, COMPLETED: READY, ERROR: READY},
     "save": {s: s for s in (READY, RUNNING, PAUSED, STOPPED, COMPLETED, ERROR)},
+    # live dramaturgical cues for the NEXT turn; never change state, always logged
+    "cue": {s: s for s in (READY, RUNNING, PAUSED)},
+    "hold": {s: s for s in (READY, RUNNING, PAUSED)},
     "quit": {s: CLOSED for s in STATES if s != CLOSED},
 }
 

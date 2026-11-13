@@ -5,9 +5,30 @@
 This repo is the **standalone, clean-boundary proof** that the handoff (v0.1, 2026-11-13) calls for when no verified Mozare Studio extension point is available. It does not replace Studio, Audial, Core or Hermes. **Next operator: [`docs/HANDOFF_JIMMY.md`](docs/HANDOFF_JIMMY.md)** (host handoff). See [`docs/REVIEW_PACKET.md`](docs/REVIEW_PACKET.md) for what is verified, what is proposal, and what remains open.
 [`docs/AESTHETICS_AND_METHOD.md`](docs/AESTHETICS_AND_METHOD.md) shows how design choices are drawn from the Mozare Wiki: the practice, methods and aesthetics context. The wiki is read-only from here.
 
-> Status: Gate 1 (text-only, mock, event log, human controls) is complete and tested. The Gate 2 scaffolding (measured-duration ceiling, speechless TTS, Piper adapter, CLI player) exists, but **no live model or real voice has been run yet**.
+> **Status (v1, 2026-11-14, host):** ready to use on the Windows host. Text is written ahead of the voices (no dead air after a short announced pre-roll), each performer has its own free model, thinking effort and source, voices come from the Line Machine, and Pause/Stop act on the real Windows sound device. Verified silently (live free model + real voices on a silent clock; the sound device with silent audio). The audible listening check is the owner's: see [`docs/RUNBOOK.html`](docs/RUNBOOK.html) cards 1 and 5.
 
-## Quick start
+## Use it (no commands)
+
+1. Double-click **`START-DEBATE.bat`**. A page opens at http://127.0.0.1:4797/.
+2. Check the green dots (models, voices, speakers). Press **Start**.
+3. Pause / Resume / Stop at the top. Every debate is saved in `sessions/`.
+
+Run-book: [`docs/RUNBOOK.html`](docs/RUNBOOK.html). Host evidence: [`docs/HOST_ACCEPTANCE.md`](docs/HOST_ACCEPTANCE.md), [`docs/HOST_REUSE_MAP.md`](docs/HOST_REUSE_MAP.md). Design and its independent checks: [`docs/reality/`](docs/reality/).
+
+### How the timing works (owner's idea, OM-907)
+
+```
+writer  ── text A, B, A … ──▶  voicer ── WAV in order ──▶  player
+(free models, as fast        (Line Machine,               (waits for a pre-roll sized from
+ as they answer)              ceiling enforced)             measured speeds, then plays turn
+                                                            after turn with the designed gap)
+```
+`Turns written ahead = 0` (or `--lookahead 0`) gives the old serial behaviour.
+
+### Model sources
+`config/sources.example.json` lists every free source (Kilo free, OpenCode Zen free and Cline free via 9router, LM Studio, Ollama). Copy it to `config/sources.json` to change it locally; keys come from an environment variable or a `key_file`, never from the repo. `python -m audible_debate sources` prints what is live now.
+
+## Command line (developers)
 
 Requires Python ≥ 3.10 and nothing else (stdlib only).
 

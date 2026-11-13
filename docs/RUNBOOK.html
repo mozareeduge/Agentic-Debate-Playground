@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Debate Run-book</title>
+<style>
+:root{--bg:#f6f5f2;--panel:#fff;--ink:#1d1c1a;--muted:#6b6862;--line:#e3e0da;--ok:#2e7d4f;--warn:#b07a12;--accent:#2f5d8a;--chip:#efece6}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#141413;--panel:#1d1c1b;--ink:#ecebe7;--muted:#a29f98;--line:#33312e;--ok:#5fc48a;--warn:#e2b04a;--accent:#7fb0e0;--chip:#2a2826}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:760px;margin:0 auto;padding:16px}
+h1{font-size:24px;margin:6px 0 4px} .lead{color:var(--muted);margin:0 0 14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:0 0 12px}
+.card h2{font-size:18px;margin:0 0 6px;display:flex;gap:10px;align-items:center}
+.min{font-size:13px;background:var(--chip);border-radius:999px;padding:2px 9px;color:var(--muted);font-weight:500}
+ol{margin:6px 0 6px 0;padding-left:22px} li{margin:3px 0}
+.see{border-left:4px solid var(--ok);padding:6px 10px;margin:8px 0;background:var(--chip);border-radius:0 8px 8px 0}
+.not{border-left:4px solid var(--warn);padding:6px 10px;margin:8px 0;background:var(--chip);border-radius:0 8px 8px 0}
+.tick{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.tick input[type=checkbox]{width:26px;height:26px}
+.tick label{min-height:44px;display:inline-flex;align-items:center;padding:0 6px}
+.src{font-size:14px;margin:6px 0 0}
+.tick input[type=text]{flex:1;min-width:180px;min-height:44px;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+a{color:var(--accent)} code{background:var(--chip);padding:1px 5px;border-radius:5px;word-break:break-all}
+details{margin:10px 0} summary{cursor:pointer;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:15px} td,th{border-bottom:1px solid var(--line);padding:6px 4px;text-align:left;vertical-align:top}
+.first{background:var(--accent);color:#fff;border-radius:12px;padding:14px 16px;margin:0 0 14px}
+.first b{font-size:19px}
+.first a{color:#fff}
+</style>
+</head>
+<body>
+<main>
+  <h1>Audible Debate · run-book</h1>
+  <p class="lead">For: hearing two performers debate out loud, without gaps between turns, with the models and voices you pick.</p>
+
+  <div class="first" data-adhd="first-action">
+    <b>Try this first (about 3 minutes):</b> open the folder and double-click <b>START-DEBATE</b>.<br>
+    Folder: <code>C:\Users\Zarinpal\Documents\Agentic-Debate-Playground</code>
+  </div>
+
+  <div class="card" data-adhd="item" id="c1">
+    <h2>1 · Your first debate <span class="min">3 min</span></h2>
+    <ol>
+      <li>Double-click <b>START-DEBATE</b>. A page opens in your browser.</li>
+      <li>Look at <b>1 · Is everything ready?</b> You want green dots on <b>Kilo · free</b>, <b>Voices</b> and <b>Speakers</b>.</li>
+      <li>Press the big <b>Start</b> at the top.</li>
+    </ol>
+    <div class="see"><b>You should see:</b> “Preparing: 1 of 2 voices ready · sound starts in about N s”. After about 20–40 seconds David speaks, then Zira answers, turn after turn, with a short silence between them. The counters show <i>written</i> running ahead of <i>heard</i>.</div>
+    <div class="not"><b>If not:</b> see the card below that matches what you see.</div>
+    <p class="src">Source: <a data-adhd="source" href="http://127.0.0.1:4797/">Open the debate page (after START-DEBATE)</a></p>
+    <div class="tick"><input type="checkbox" id="t1"><label for="t1">Done</label><input type="text" id="n1" placeholder="note (optional)"></div>
+  </div>
+
+  <div class="card" data-adhd="item" id="c2">
+    <h2>2 · “Preparing…” and nothing plays <span class="min">2 min</span></h2>
+    <ol>
+      <li>Wait: it starts by itself after at most 90 seconds (the page shows the countdown).</li>
+      <li>If a red <b>What went wrong</b> line appears: pick another model for that performer (the fastest today was <b>nemotron-3-ultra-550b-a55b:free</b>), then press <b>Start</b> again.</li>
+    </ol>
+    <div class="see"><b>Why:</b> free models are sometimes slow or busy. The debate never swaps the model behind your back; it tells you.</div>
+    <p class="src">Source: <a data-adhd="source" href="http://127.0.0.1:4797/">Debate page · section 3 “Now”</a></p>
+    <div class="tick"><input type="checkbox" id="t2"><label for="t2">Checked</label><input type="text" id="n2" placeholder="note"></div>
+  </div>
+
+  <div class="card" data-adhd="item" id="c3">
+    <h2>3 · Voices show “not running” <span class="min">1 min</span></h2>
+    <ol>
+      <li>Press <b>Start voices</b> on the page. It starts the Line Machine in the background (no window, no sound).</li>
+      <li>Wait about a minute; the dot turns green by itself.</li>
+    </ol>
+    <div class="not"><b>Still red?</b> Tell Jimmy “debate voices won’t start”.</div>
+    <p class="src">Source: <a data-adhd="source" href="http://127.0.0.1:4797/">Debate page · section 1 “Is everything ready?”</a></p>
+    <div class="tick"><input type="checkbox" id="t3"><label for="t3">Checked</label><input type="text" id="n3" placeholder="note"></div>
+  </div>
+
+  <div class="card" data-adhd="item" id="c4">
+    <h2>4 · A source says “needs key” or “offline” <span class="min">0 min</span></h2>
+    <p>Nothing to do now: Kilo · free works without a key. <b>OpenCode Zen</b> and <b>Cline</b> free lanes need the 9router key; <b>LM Studio</b> and <b>Ollama</b> appear by themselves when you open them.</p>
+    <p class="src">Source: <a data-adhd="source" href="https://github.com/mozareeduge/Agentic-Debate-Playground/blob/ccr-18cb2ef2-x3dzio/config/sources.example.json">The list of model sources</a></p>
+    <div class="tick"><input type="checkbox" id="t4"><label for="t4">Understood</label><input type="text" id="n4" placeholder="note"></div>
+  </div>
+
+  <div class="card" data-adhd="item" id="c5">
+    <h2>5 · Pause and Stop <span class="min">2 min</span></h2>
+    <ol>
+      <li>While someone speaks, press <b>Pause</b>: the voice should freeze mid-word, and nothing new is written.</li>
+      <li>Press <b>Resume</b>: it continues from the same word.</li>
+      <li>Press <b>Stop</b>: silence at once. Turns written ahead are never played; they are kept in the session folder.</li>
+    </ol>
+    <div class="not"><b>If the sound did not freeze or stop:</b> press Stop again, then <b>Stop server</b>, and tell Jimmy. This is the one check no agent has heard yet (agents may not play sound without your permission).</div>
+    <p class="src">Source: <a data-adhd="source" href="https://github.com/mozareeduge/Agentic-Debate-Playground/blob/ccr-18cb2ef2-x3dzio/docs/HOST_ACCEPTANCE.md">The pending listening checks</a></p>
+    <div class="tick"><input type="checkbox" id="t5"><label for="t5">Pause froze · Stop silenced</label><input type="text" id="n5" placeholder="note"></div>
+  </div>
+
+  <div class="card" data-adhd="item" id="c6">
+    <h2>6 · Experiments <span class="min">5–10 min each</span></h2>
+    <table>
+      <tr><th>Change</th><th>Where</th><th>Listen for</th></tr>
+      <tr><td>Persian debate</td><td>Language → فارسی (voices switch to امیر / مانا)</td><td>Persian voices; a longer preparation (~40 s)</td></tr>
+      <tr><td>Thinking effort</td><td>none / low / medium / high per performer</td><td>Sharper replies vs. longer preparation</td></tr>
+      <tr><td>Two different models</td><td>Model for B only</td><td>Do the personas still differ? (compare with same-model runs)</td></tr>
+      <tr><td>Old one-at-a-time</td><td>More timing knobs → Turns written ahead = 0</td><td>The gaps your idea removed</td></tr>
+      <tr><td>Silence as material</td><td>Silence between turns; Cue → Hold</td><td>Designed silence vs. waiting</td></tr>
+    </table>
+    <p class="src">Source: <a data-adhd="source" href="http://127.0.0.1:4797/">Debate page · section 2 and “More timing knobs”</a></p>
+    <div class="tick"><input type="checkbox" id="t6"><label for="t6">Tried one</label><input type="text" id="n6" placeholder="what you heard"></div>
+  </div>
+
+  <div class="card" data-adhd="resume">
+    <h2>Where you stopped</h2>
+    <p id="resume">Nothing ticked yet.</p>
+    <p>Every debate is saved by itself in <code>C:\Users\Zarinpal\Documents\Agentic-Debate-Playground\sessions</code> (transcript, audio, timing).</p>
+    <p>To close everything: <b>Stop server</b> on the debate page.</p>
+  </div>
+
+  <details>
+    <summary>What was checked, and what was not</summary>
+    <table>
+      <tr><th>Checked</th><th>How</th><th>Result</th></tr>
+      <tr><td>No gaps after the start</td><td>Live English run, 6 turns, free model + Line Machine voices, silent clock</td><td>0.0 s gap after a 22 s start; one turn took 41 s to write and was still not heard as a gap</td></tr>
+      <tr><td>Persian</td><td>Live run, 4 turns, امیر / مانا</td><td>0.0 s gap after a 40 s start; real Persian speech</td></tr>
+      <tr><td>Pause / Stop on the real Windows sound device</td><td>Silent audio file through the device</td><td>Pause froze the position; Stop took 43 ms</td></tr>
+      <tr><td>Turn length ceiling, saved evidence</td><td>verify on every session</td><td>0 turns over the ceiling; every file hash matches</td></tr>
+      <tr><td>Automatic tests</td><td>40 tests</td><td>all pass</td></tr>
+      <tr><td><b>Not yet checked</b></td><td>Hearing it on the speakers (agents need your permission to play sound)</td><td>Cards 1 and 5 are that check</td></tr>
+    </table>
+  </details>
+</main>
+<script>
+const ids = [1,2,3,4,5,6];
+const S = {get(k){try{return JSON.parse(localStorage.getItem("debate-runbook:"+k))}catch{return null}}, set(k,v){try{localStorage.setItem("debate-runbook:"+k, JSON.stringify(v))}catch{}}};
+function resume(){
+  const done = ids.filter(i => document.getElementById("t"+i).checked);
+  const next = ids.find(i => !document.getElementById("t"+i).checked);
+  document.getElementById("resume").textContent = done.length ? `Done: card ${done.join(", ")}. Next: card ${next ?? "—"}.` : "Nothing ticked yet. Start with card 1.";
+}
+ids.forEach(i => {
+  const t = document.getElementById("t"+i), n = document.getElementById("n"+i), v = S.get(i) || {};
+  t.checked = !!v.done; n.value = v.note || "";
+  const save = () => { S.set(i, {done:t.checked, note:n.value}); resume(); };
+  t.onchange = save; n.oninput = save;
+});
+resume();
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 **Audible Debate of Agents: v0 prototype.** Two AI performers (A, *The Examiner*, and B, *The Reframer*) debate one human-chosen question in alternating turns. Each turn is spoken in its own synthetic voice under a hard audible ceiling. A human controls Start / Pause / Resume / Stop / Save / New / Quit.
 
-This repo is the **standalone, clean-boundary proof** that the handoff (v0.1, 2026-11-13) calls for when no verified Mozare Studio extension point is available. It does not replace Studio, Audial, Core or Hermes. See [`docs/REVIEW_PACKET.md`](docs/REVIEW_PACKET.md) for what is verified, what is proposal, and what remains open.
+This repo is the **standalone, clean-boundary proof** that the handoff (v0.1, 2026-11-13) calls for when no verified Mozare Studio extension point is available. It does not replace Studio, Audial, Core or Hermes. **Next operator: [`docs/HANDOFF_JIMMY.md`](docs/HANDOFF_JIMMY.md)** (host handoff). See [`docs/REVIEW_PACKET.md`](docs/REVIEW_PACKET.md) for what is verified, what is proposal, and what remains open.
 [`docs/AESTHETICS_AND_METHOD.md`](docs/AESTHETICS_AND_METHOD.md) shows how design choices are drawn from the Mozare Wiki: the practice, methods and aesthetics context. The wiki is read-only from here.
 
 > Status: Gate 1 (text-only, mock, event log, human controls) is complete and tested. The Gate 2 scaffolding (measured-duration ceiling, speechless TTS, Piper adapter, CLI player) exists, but **no live model or real voice has been run yet**.

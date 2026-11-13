@@ -45,12 +45,53 @@ class Rendered:
     engine_version: str
     params: dict
     synth_time_s: float
+    voice: str = ""
+    analysis: dict | None = None
 
 
 def measure_wav(path: str | Path) -> tuple[float, int, int]:
     with wave.open(str(path), "rb") as w:
         frames, rate, ch = w.getnframes(), w.getframerate(), w.getnchannels()
     return frames / float(rate), rate, ch
+
+
+def analyze_wav(path: str | Path) -> dict:
+    """Loudness facts from decoded samples: rms/peak in dBFS and a speech_like flag.
+
+    speech_like = at least 30 % of 50 ms frames are louder than -45 dBFS. It proves the file is
+    not silence; it does not prove intelligibility (that is a human listening check).
+    """
+    import array
+    import math
+    with wave.open(str(path), "rb") as w:
+        rate, ch, width, n = w.getframerate(), w.getnchannels(), w.getsampwidth(), w.getnframes()
+        data = w.readframes(n)
+    if width != 2 or n == 0:
+        return {"rms_dbfs": None, "peak_dbfs": None, "speech_like": False, "note": f"sample width {width}"}
+    a = array.array("h", data)
+    if ch > 1:
+        a = array.array("h", a[::ch])
+    def dbfs(x):
+        return round(20 * math.log10(x / 32768.0), 1) if x > 0 else -120.0
+    total = sum(v * v for v in a)
+    rms = math.sqrt(total / len(a))
+    frame = max(1, int(rate * 0.05))
+    loud = frames = 0
+    thr = 32768.0 * 10 ** (-45 / 20)
+    for i in range(0, len(a), frame):
+        seg = a[i:i + frame]
+        if not seg:
+            continue
+        frames += 1
+        if math.sqrt(sum(v * v for v in seg) / len(seg)) > thr:
+            loud += 1
+    share = loud / frames if frames else 0.0
+    return {"rms_dbfs": dbfs(rms), "peak_dbfs": dbfs(max(abs(v) for v in a)), "loud_frame_share": round(share, 3),
+            "speech_like": share >= 0.30}
+
+
+def is_wav_bytes(data: bytes) -> bool:
+    return len(data) > 44 and data[:4] == b"RIFF" and data[8:12] == b"WAVE"
 
 
 def sha256_file(path: str | Path) -> str:

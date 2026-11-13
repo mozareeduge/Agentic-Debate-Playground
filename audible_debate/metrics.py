@@ -75,6 +75,11 @@ def run_metrics(turns: list[dict]) -> dict:
             "operator_cue": (t.get("operator_cue") or {}).get("technique"),
             "designed_silence_s": t.get("designed_silence_s"),
             "undesigned_wait_s": t.get("undesigned_wait_s"),
+            "preroll": bool(t.get("preroll")),
+            "chosen_model": t.get("chosen_model"), "served_model": t.get("served_model") or t.get("model"),
+            "served_mismatch": bool(t.get("served_mismatch")),
+            "voice": t.get("voice"), "speech_like": (t.get("audio_analysis") or {}).get("speech_like"),
+            "duration_s": t.get("duration_s"),
         }
         per_turn.append(row)
         by_speaker[t["speaker"]].append(r["utterance"])
@@ -106,8 +111,13 @@ def run_metrics(turns: list[dict]) -> dict:
             "max_undesigned_wait_s": max(waits) if waits else None,
             "mean_undesigned_wait_s": round(sum(waits) / len(waits), 3) if waits else None,
             "gaps_where_latency_exceeded_designed_silence": sum(u > d for d, u in gaps),
+            "preroll_s": next((r["undesigned_wait_s"] for r in per_turn if r["preroll"]), None),
+            "max_underrun_after_first_s": max((r["undesigned_wait_s"] for r in per_turn[1:]
+                                               if r["undesigned_wait_s"] is not None), default=None),
             "note": "designed silence is in audible seconds; undesigned wait is wall time spent generating/synthesizing (pauses excluded)",
         },
+        "speech_like_turns": sum(bool(r["speech_like"]) for r in per_turn),
+        "served_mismatches": sum(r["served_mismatch"] for r in per_turn),
         "note": "descriptors only; not a quality score",
     }
 
@@ -152,5 +162,8 @@ def verify_session(session_dir: str | Path) -> dict:
     return {"session": d.name, "events": len(events), "actions": actions, "replayed_state": final,
             "residue_records": residue_n,
             "turns_recorded": len(turns), "ceiling_s": ceiling,
-            "max_duration_s": max((t["duration_s"] for t in turns), default=0), "problems": problems,
+            "max_duration_s": max((t["duration_s"] for t in turns), default=0),
+            "turns_over_ceiling": len(over),
+            "speech_like_turns": sum(bool((t.get("audio_analysis") or {}).get("speech_like")) for t in turns),
+            "engines": sorted({t.get("tts_engine", "?") for t in turns}), "problems": problems,
             "ok": not problems}

@@ -112,10 +112,27 @@ class MockAdapter:
                           usage={"prompt_sha256": hashlib.sha256(user.encode()).hexdigest()[:16]})
 
 
-class OpenAICompatAdapter:
-    provider = "openai-compatible"
+EFFORT_MAX_TOKENS = {"none": 900, "low": 1400, "medium": 2400, "high": 4000}
+RETRYABLE = (429, 500, 502, 503, 504)
 
-    def __init__(self, endpoint: str | None, model: str, api_key: str | None = None, structured: bool = True):
+
+class OpenAICompatAdapter:
+    """One performer's brain on one OpenAI-compatible source.
+
+    effort: none | low | medium | high -> `reasoning_effort` (omitted for none) and an
+    effort-sized max_tokens so reasoning models do not run out before the JSON reply.
+    Failures (429/5xx/timeout/empty content) are retried on the SAME model (2 s, 6 s,
+    Retry-After up to 20 s); then LLMError. A rejected optional parameter
+    (reasoning_effort, response_format) is dropped once and recorded in `dropped_params`.
+    Another model or provider is never substituted.
+    """
+
+    provider = "openai-compatible"
+    supports_gate = True   # the controller passes gate(): called before every retry, blocks while paused
+
+    def __init__(self, endpoint: str | None, model: str, api_key: str | None = None, structured: bool = True,
+                 effort: str = "none", source_id: str = "", router: bool = False, retries: int = 2,
+                 backoff_s: tuple = (2.0, 6.0)):
         endpoint = endpoint or os.environ.get("DEBATE_LLM_ENDPOINT")
         if not endpoint:
             raise LLMError("no endpoint given; pass --endpoint or set DEBATE_LLM_ENDPOINT (use `discover` first)")
@@ -125,6 +142,24 @@ class OpenAICompatAdapter:
         self.model = model
         self.api_key = api_key or os.environ.get("DEBATE_LLM_API_KEY", "")
         self.structured = structured
+        if effort not in EFFORT_MAX_TOKENS:
+            raise LLMError(f"effort must be one of {list(EFFORT_MAX_TOKENS)}")
+        self.effort = effort
+        self.source_id = source_id or self.endpoint
+        self.router = router
+        self.retries, self.backoff_s = retries, backoff_s
+        self.dropped_params: list[str] = []
+        self._sleep = time.sleep
+
+    @classmethod
+    def from_source(cls, source, model: str, effort: str = "none", **kw):
+        return cls(source.base_url, model, api_key=source.api_key(), effort=effort, source_id=source.id,
+                   router=model in getattr(source, "router_models", []), **kw)
+
+    def describe(self) -> dict:
+        return {"provider": self.provider, "source": self.source_id, "endpoint": self.endpoint,
+                "model": self.model, "effort": self.effort, "router": self.router,
+                "structured": self.structured}
 
     def _request(self, path: str, payload: dict | None, timeout_s: float) -> dict:
         req = urllib.request.Request(self.endpoint + path, method="POST" if payload is not None else "GET")
@@ -136,30 +171,79 @@ class OpenAICompatAdapter:
             with urllib.request.urlopen(req, data=data, timeout=timeout_s) as r:
                 return json.loads(r.read().decode())
         except urllib.error.HTTPError as e:
-            raise LLMError(f"HTTP {e.code} from {self.endpoint}{path}: {e.read()[:300]!r}") from e
+            body = e.read()[:400]
+            err = LLMError(f"HTTP {e.code} from {self.endpoint}{path}: {body!r}")
+            err.status, err.body = e.code, body.decode(errors="replace")
+            ra = e.headers.get("Retry-After") if e.headers else None
+            err.retry_after = float(ra) if ra and ra.replace(".", "", 1).isdigit() else None
+            raise err from e
         except (urllib.error.URLError, TimeoutError, OSError) as e:
-            raise LLMError(f"endpoint unreachable or timed out ({self.endpoint}{path}): {e}") from e
+            err = LLMError(f"endpoint unreachable or timed out ({self.endpoint}{path}): {e}")
+            # URLError = could not connect (dead port, wrong address): not retried.
+            # A bare timeout after connecting = a slow model: retried on the same model.
+            timed_out = isinstance(e, TimeoutError) and not isinstance(e, urllib.error.URLError)
+            err.status, err.body, err.retry_after = ("timeout" if timed_out else "unreachable"), "", None
+            raise err from e
 
     def list_models(self, timeout_s: float = 5.0) -> list[str]:
         data = self._request("/models", None, timeout_s)
         return [m.get("id", "?") for m in data.get("data", [])]
 
-    def generate(self, messages: list[dict], params: dict, timeout_s: float) -> Generation:
+    def _payload(self, messages, params) -> dict:
         payload = {"model": self.model, "messages": messages, **params}
-        if self.structured:
+        payload["max_tokens"] = max(int(params.get("max_tokens", 0) or 0), EFFORT_MAX_TOKENS[self.effort])
+        if self.effort != "none" and "reasoning_effort" not in self.dropped_params:
+            payload["reasoning_effort"] = self.effort
+        if self.structured and "response_format" not in self.dropped_params:
             payload["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {"name": "debate_reply", "strict": True, "schema": REPLY_JSON_SCHEMA},
             }
+        return payload
+
+    def generate(self, messages: list[dict], params: dict, timeout_s: float, gate=None) -> Generation:
         t0 = time.monotonic()
-        data = self._request("/chat/completions", payload, timeout_s)
-        try:
-            raw = data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as e:
-            raise LLMError(f"unexpected response shape: {str(data)[:300]}") from e
-        served = data.get("model") or self.model
-        return Generation(raw=raw, provider=self.provider + ":" + self.endpoint, model=served, params=dict(params),
-                          latency_s=time.monotonic() - t0, usage=data.get("usage") or {})
+        attempts, last = 0, None
+        while True:
+            if attempts and gate:
+                gate()
+            payload = self._payload(messages, params)
+            try:
+                data = self._request("/chat/completions", payload, timeout_s)
+                raw = (data.get("choices") or [{}])[0].get("message", {}).get("content")
+                if not raw or not str(raw).strip():
+                    last = LLMError(f"empty content from {self.model} (finish_reason="
+                                    f"{(data.get('choices') or [{}])[0].get('finish_reason')})")
+                    last.status, last.retry_after = "empty", None
+                    raise last
+                served = data.get("model") or self.model
+                p = dict(params, effort=self.effort, max_tokens=payload["max_tokens"])
+                return Generation(raw=raw, provider=f"{self.provider}:{self.source_id}", model=served, params=p,
+                                  latency_s=time.monotonic() - t0,
+                                  usage={**(data.get("usage") or {}), "chosen_model": self.model,
+                                         "served_model": served, "router": self.router,
+                                         "attempts": attempts + 1, "dropped_params": list(self.dropped_params)})
+            except LLMError as e:
+                status = getattr(e, "status", None)
+                body = (getattr(e, "body", "") or "").lower()
+                if status == 400:
+                    for opt in ("reasoning_effort", "response_format"):
+                        if opt in payload and opt not in self.dropped_params and (opt in body or "unsupported" in body
+                                                                                    or "not supported" in body):
+                            self.dropped_params.append(opt)
+                            break
+                    else:
+                        raise
+                    continue
+                retryable = status in RETRYABLE or status in ("timeout", "empty")
+                if not retryable or attempts >= self.retries:
+                    raise LLMError(f"{e} (after {attempts + 1} attempt(s) on {self.model}; no other model is used)") from e
+                wait = self.backoff_s[min(attempts, len(self.backoff_s) - 1)]
+                ra = getattr(e, "retry_after", None)
+                if ra:
+                    wait = min(20.0, max(wait, ra))
+                attempts += 1
+                self._sleep(wait)
 
 
 def discover(candidates: list[str], timeout_s: float = 2.0) -> list[dict]:

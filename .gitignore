@@ -1,3 +1,5 @@
 sessions/
 __pycache__/
 *.pyc
+config/sources.json
+.debate-server.log

@@ -150,14 +150,17 @@ function perfCard(key){
   const el = $("#perf"+key);
   el.innerHTML = `<h3>Performer ${key} · ${key==="A"?"The Examiner":"The Reframer"}</h3>
     <label for="src${key}">Source</label><select id="src${key}"></select>
-    <label for="model${key}">Model (free)</label><select id="model${key}"></select>
+    <label for="model${key}">Model (free)</label>
+    <div class="controls" style="flex-wrap:nowrap"><select id="model${key}"></select><button type="button" id="test${key}" title="Send one tiny request to see if this model answers right now">Test</button></div>
+    <div class="vchk" id="mchk${key}"></div>
     <label>Thinking effort</label><div class="seg" id="eff${key}" role="group" aria-label="Effort ${key}"></div>
     <label for="voice${key}">Voice</label><select id="voice${key}"></select>
     <div class="vchk" id="vchk${key}"></div>`;
   $("#eff"+key).innerHTML = EFFORTS.map(e => `<button type="button" data-e="${e}" aria-pressed="false">${e}</button>`).join("");
   $("#eff"+key).onclick = ev => { const b = ev.target.closest("button"); if(!b) return; setEffort(key, b.dataset.e); save(); };
   $("#src"+key).onchange = () => { fillModels(key); save(); };
-  $("#model"+key).onchange = save;
+  $("#model"+key).onchange = () => { $("#mchk"+key).textContent = ""; save(); };
+  $("#test"+key).onclick = () => testModel(key);
   $("#voice"+key).onchange = () => { checkVoice(key); save(); };
 }
 function setEffort(key, e){ document.querySelectorAll(`#eff${key} button`).forEach(b => b.setAttribute("aria-pressed", String(b.dataset.e===e))); }
@@ -194,6 +197,14 @@ function fillVoices(key, want){
   const defaults = lang==="fa" ? {A:"amir", B:"mana"} : {A:"en_david", B:"en_zira"};
   const ids = VOICES.map(v => v.id);
   sel.value = ids.includes(want) ? want : (ids.includes(defaults[key]) ? defaults[key] : "placeholder");
+}
+async function testModel(key){
+  const out = $("#mchk"+key); out.className = "vchk"; out.textContent = "Asking this model once…";
+  try{
+    const r = await api("/api/models/test", {source:$("#src"+key).value, model:$("#model"+key).value});
+    if (r.ok){ out.className = "vchk ok"; out.textContent = `✓ Answers now, in ${r.seconds} s` + (r.served_model && !$("#model"+key).value.endsWith(r.served_model) ? ` (served by ${r.served_model})` : ""); }
+    else { out.className = "vchk bad"; out.textContent = `✗ Not answering right now (${r.seconds} s). Pick another model and press Test.`; }
+  }catch(e){ out.className = "vchk bad"; out.textContent = "✗ " + e.message; }
 }
 async function checkVoice(key){
   const v = $("#voice"+key).value, lang = $("#language").value, out = $("#vchk"+key);
@@ -280,7 +291,7 @@ function render(s){
   } else if (p.state==="done"){ prep = `Sound started after ${Math.round(p.preroll_s||0)} s of preparation` + (p.capped?" (started at the time limit; short waits between turns may happen)":""); }
   $("#prep").innerHTML = prep;
   $("#labels").innerHTML = s.labels && s.labels.any ? `<div class="label">${esc(s.labels.label)}</div>` : (s.mode==="silent" && s.state!=="none" ? `<div class="label">Silent rehearsal: nothing is played on the speakers.</div>` : "");
-  $("#error").textContent = s.last_error ? ("What went wrong: " + s.last_error + "\nWhat to do: press Start to try again, or pick another model for that performer.") : "";
+  $("#error").textContent = s.last_error ? ("What went wrong: " + s.last_error + "\nWhat to do: press Test next to each model, pick one that answers, then press Start again.") : "";
   $("#where").textContent = s.session_dir ? "Saved automatically in: " + s.session_dir : "";
   const cueSel = $("#cue"); if (s.cues && !cueSel.options.length) cueSel.innerHTML = s.cues.map(c => `<option>${esc(c)}</option>`).join("");
   const rtl = $("#language").value === "fa";

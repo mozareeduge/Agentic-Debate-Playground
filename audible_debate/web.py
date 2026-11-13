@@ -25,7 +25,7 @@ from .audio import ClockPlayer, SpeechlessTTS
 from .controller import Controller, SessionConfig
 from .knowledge import KnowledgeProfile
 from .linemachine import DEFAULT_URL as LM_URL, LineMachineTTS, check_voice, list_voices, start_line_machine
-from .llm import MockAdapter, OpenAICompatAdapter
+from .llm import MockAdapter, OpenAICompatAdapter, quick_test
 from .personas import CUE_TECHNIQUES
 from .sources import EFFORTS, discover_all, get_source, load_sources
 
@@ -130,7 +130,7 @@ class App:
                 turns=int(body.get("turns", 6)), max_turn_seconds=float(body.get("max_turn_seconds", 75)),
                 gap_seconds=float(body.get("gap_seconds", 1.5)), lookahead=int(body.get("lookahead", 3)),
                 preroll_min=int(body.get("preroll_min", 2)), max_preroll_s=float(body.get("max_preroll_s", 90)),
-                language=body.get("language", "en"), llm_timeout_s=float(body.get("llm_timeout_s", 120)),
+                language=body.get("language", "en"), llm_timeout_s=float(body.get("llm_timeout_s", 60)),
                 performers={k: {kk: perfs[k].get(kk) for kk in ("source", "model", "effort", "voice", "wps")}
                             for k in ("A", "B")},
                 knowledge={"A": KnowledgeProfile("none"), "B": KnowledgeProfile("none")})
@@ -244,6 +244,11 @@ def make_handler(app: App):
                     return self._send(200, app.act(body))
                 if self.path == "/api/voices/start":
                     return self._send(200, start_line_machine(LM_URL))
+                if self.path == "/api/models/test":
+                    if body.get("source") == "mock":
+                        return self._send(200, {"ok": True, "seconds": 0.0, "note": "offline script"})
+                    return self._send(200, quick_test(app._llm({"source": body.get("source"), "model": body.get("model"),
+                                                                 "effort": "none"})))
                 if self.path == "/api/voices/check":
                     return self._send(200, app.check(body.get("voice", ""), body.get("language", "en")))
                 if self.path == "/api/shutdown":

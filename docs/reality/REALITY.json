@@ -63,14 +63,13 @@
   ],
   "design": "DESIGN.md",
   "build_artifacts": [
-    "audible_debate/pipeline.py",
-    "audible_debate/sources.py",
-    "audible_debate/linemachine.py",
-    "audible_debate/winplay.py",
-    "audible_debate/web.py",
-    "audible_debate/static/index.html",
-    "START-DEBATE.bat",
-    "docs/RUNBOOK.html"
+    "../../audible_debate/sources.py",
+    "../../audible_debate/linemachine.py",
+    "../../audible_debate/winplay.py",
+    "../../audible_debate/web.py",
+    "../../audible_debate/static/index.html",
+    "../../START-DEBATE.bat",
+    "../RUNBOOK.html"
   ],
   "r1_report": "R1_REPORT.md",
   "r1": {
@@ -125,7 +124,48 @@
       "checked_at": "2026-11-14T00:20:25"
     }
   },
-  "r2": {},
+  "r2": {
+    "N1": {
+      "actual": "Live English 6-turn run (silent clock, real kilo-free model, real Line Machine voices): after turn 1 every turn has undesigned_wait_s 0.0; turn 1 waited 22.29 s as the announced pre-roll. Write times 8-41 s did not surface as gaps. Persian 4-turn run: same, pre-roll 40.2 s. Playback was a silent clock, so the gap-free feel through speakers is unheard.",
+      "metric_value": "max underrun after first turn 0.0 s (both sessions); pre-roll 22.3 s (EN), 40.2 s (FA)",
+      "verdict": "met",
+      "evidence": "sessions/20261113T210447Z-7f7b8b and 20261113T211400Z-77a253: metrics beat.max_underrun_after_first_s=0.0; turns/*.json undesigned_wait_s; tests T20/T21 pass. Pending: audible audition (HOST_ACCEPTANCE card A).",
+      "checked_by": "Sonnet 5.5 subagent (fresh, R2)",
+      "checked_at": "2026-11-14T01:00:01"
+    },
+    "N2": {
+      "actual": "The page has per-performer Source, Model (live free list), Effort and Voice selects. sources lists kilo-free (11 free models live), opencode-zen-free (3 models, needs 9router key, not set), cline-free (0, needs key), lmstudio and ollama offline. Records name chosen and served model per turn, 0 mismatches. Both live sessions used the same source and model for A and B, so 'two different sources for A and B' was never run live; only unit test T24 covers different performers. I did not open the page (no browser allowed), so click count is unmeasured.",
+      "metric_value": "1 live usable keyless source (kilo-free, 11 models); 2 more need a key; chosen vs recorded mismatch 0 in 10 live turns; clicks unmeasured",
+      "verdict": "partly",
+      "evidence": "audible_debate/static/index.html lines 152-157 (per-performer pickers), web.py lines 120-134; 'python -m audible_debate sources' output; sessions/*/config.json performers and turns/*.json chosen_model/served_model/served_mismatch=false; tests/test_pipeline.py T24. Missing: live A/B on different sources; keyed sources unavailable.",
+      "checked_by": "Sonnet 5.5 subagent (fresh, R2)",
+      "checked_at": "2026-11-14T01:00:01"
+    },
+    "N3": {
+      "actual": "Both live sessions: every turn engine line-machine, voices en_david/en_zira and amir/mana chosen per performer, 10 of 10 turns speech_like, durations 15.6-43.6 s vs ceilings 45/40, 0 over. One turn (t06B) first exceeded the ceiling at 45.59 s and was shortened and re-voiced, recorded as residue. Whether it sounds right to the owner is unheard.",
+      "metric_value": "10/10 turns real speech; 0 turns over ceiling; max 43.59 s (ceiling 45)",
+      "verdict": "met",
+      "evidence": "python -m audible_debate verify on both sessions: ok=true, problems=[], speech_like_turns 6 and 4, engines ['line-machine']; turns/*.json tts_engine, voice, audio_analysis.speech_like, duration_s; residue.jsonl ceiling_shortened_text.",
+      "checked_by": "Sonnet 5.5 subagent (fresh, R2)",
+      "checked_at": "2026-11-14T01:00:01"
+    },
+    "N4": {
+      "actual": "Real Windows MCI device with a silent WAV: pause froze device position (test T25; event log pause at 1.579 s, resume at 1.612 s); stop latency 42.86 ms (device 42.17 ms), worker_cancelled logged, state saved, then quit. Controller tests T17 (stop with full queue, no plays after), T18 (pause starts no new request), T19 (restart never autoplays) pass. Session 50fbee used the mock script and 4 queued turns, none played after stop. Never heard through speakers: that stop silences audibly is inferred from device state, and no live-model session was stopped mid-queue.",
+      "metric_value": "stop-to-silence 42.9 ms (device closed); turns heard after Stop 0; work done while paused 0 (unit test T18)",
+      "verdict": "met",
+      "evidence": "sessions/20261113T210912Z-50fbee/events.jsonl seq 18-22; tests/test_pipeline.py lines 112-157 and 382-412; python -m unittest: 40 tests OK. Pending: audible pause/stop (HOST_ACCEPTANCE B, C).",
+      "checked_by": "Sonnet 5.5 subagent (fresh, R2)",
+      "checked_at": "2026-11-14T01:00:01"
+    },
+    "N5": {
+      "actual": "START-DEBATE.bat is a single double-click: checks for a running server, finds pythonw/pyw, starts it hidden, waits up to 20 s, opens http://127.0.0.1:4797/, and prints plain instructions if Python is missing. Run-book card 1 has 3 steps with 'you should see' and 'if not' lines, plus 5 more cards and tick boxes that survive interruption. I could not execute the .bat or open the page (silent-only rules) and no fresh reader has done it, so minutes to first heard turn and questions asked are unmeasured. Several fallbacks end with 'tell Jimmy', and cold start of the voices is unproven.",
+      "metric_value": "minutes to first heard turn: not measured (page promises about 20-40 s after Start); questions asked: not measured",
+      "verdict": "partly",
+      "evidence": "START-DEBATE.bat lines 1-45; docs/RUNBOOK.html cards 1-6; index.html controls (Start, Pause, Resume, Stop, Start voices, Stop server); HOST_ACCEPTANCE.md pending card A. No evidence of a fresh-reader walk.",
+      "checked_by": "Sonnet 5.5 subagent (fresh, R2)",
+      "checked_at": "2026-11-14T01:00:01"
+    }
+  },
   "frozen": {
     "at": "2026-11-14T00:12:19",
     "needs_sha": "45972e920218408d63e2797d894583d427cda645b8033eacbc993e82551a96ba"
@@ -156,5 +196,7 @@
       "checked_at": "2026-11-14T00:18:22"
     }
   ],
-  "r1_checked_at": "2026-11-14T00:20:25"
+  "r1_checked_at": "2026-11-14T00:20:25",
+  "build_note": "The pipeline lives in audible_debate/controller.py (_run_pipeline, _preroll). That file came with the clone (created before the needs freeze) and was MODIFIED after R1 (last modified 2026-11-14T00:30:14), so it is not listed as a created artifact; the gate reads creation times. Its changes are in commits e1748fe and later.",
+  "r2_checked_at": "2026-11-14T01:00:01"
 }

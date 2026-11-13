@@ -236,7 +236,9 @@ class OpenAICompatAdapter:
                         raise
                     continue
                 retryable = status in RETRYABLE or status in ("timeout", "empty")
-                if not retryable or attempts >= self.retries:
+                # a model that timed out already cost a full timeout: retry it once at most
+                limit = min(self.retries, 1) if status == "timeout" else self.retries
+                if not retryable or attempts >= limit:
                     raise LLMError(f"{e} (after {attempts + 1} attempt(s) on {self.model}; no other model is used)") from e
                 wait = self.backoff_s[min(attempts, len(self.backoff_s) - 1)]
                 ra = getattr(e, "retry_after", None)
@@ -244,6 +246,21 @@ class OpenAICompatAdapter:
                     wait = min(20.0, max(wait, ra))
                 attempts += 1
                 self._sleep(wait)
+
+
+def quick_test(adapter: "OpenAICompatAdapter", timeout_s: float = 30.0) -> dict:
+    """One tiny request (no retries) so the owner can see which free model answers right now."""
+    t0 = time.monotonic()
+    try:
+        payload = {"model": adapter.model, "max_tokens": 900,
+                   "messages": [{"role": "user", "content": "Reply with exactly: OK"}]}
+        data = adapter._request("/chat/completions", payload, timeout_s)
+        content = ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+        ok = bool(content.strip())
+        return {"ok": ok, "seconds": round(time.monotonic() - t0, 1), "served_model": data.get("model"),
+                "note": "" if ok else "answered with empty content"}
+    except LLMError as e:
+        return {"ok": False, "seconds": round(time.monotonic() - t0, 1), "note": str(e)[:160]}
 
 
 def discover(candidates: list[str], timeout_s: float = 2.0) -> list[dict]:

@@ -274,6 +274,34 @@ class TestAdapters(Base):
         finally:
             srv.close()
 
+    def test_P08_timeout_retried_once_only(self):
+        hits = []
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_POST(self):
+                hits.append(1)
+                self.rfile.read(int(self.headers["Content-Length"]))
+                time.sleep(0.6)  # slower than the client timeout
+                try:
+                    self.send_response(200)
+                    self.end_headers()
+                except OSError:
+                    pass
+
+        srv = _Server(H)
+        try:
+            a = OpenAICompatAdapter(srv.url, "slow-model", retries=2, backoff_s=(0.01, 0.01))
+            t0 = time.monotonic()
+            with self.assertRaises(LLMError):
+                a.generate([{"role": "user", "content": "x"}], {}, 0.3)
+            self.assertEqual(len(hits), 2)  # first try + one retry, not three
+            self.assertLess(time.monotonic() - t0, 2.0)
+        finally:
+            srv.close()
+
     def test_P05_effort_and_dropped_param_recorded(self):
         seen = []
 

@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audible Debate</title>
+<style>
+:root{
+  --bg:#f6f5f2; --panel:#ffffff; --ink:#1d1c1a; --muted:#6b6862; --line:#e3e0da;
+  --a:#2f5d8a; --b:#8a4b2f; --ok:#2e7d4f; --warn:#b07a12; --bad:#b3362c; --focus:#1f6feb;
+  --chip:#efece6; --btn:#1d1c1a; --btn-ink:#fff;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141413; --panel:#1d1c1b; --ink:#ecebe7; --muted:#a29f98; --line:#33312e;
+  --a:#7fb0e0; --b:#e0a07f; --ok:#5fc48a; --warn:#e2b04a; --bad:#ef7a70; --focus:#6ea8ff;
+  --chip:#2a2826; --btn:#ecebe7; --btn-ink:#141413;}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1080px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0 2px} h2{font-size:15px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.sub{color:var(--muted);margin:0 0 14px;max-width:70ch}
+.bar{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0 8px;margin:0 0 6px;border-bottom:1px solid var(--line)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin:0 0 14px}
+.health{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pill{display:inline-flex;gap:6px;align-items:center;background:var(--chip);border-radius:999px;padding:4px 10px;font-size:14px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted)} .ok .dot{background:var(--ok)} .warn .dot{background:var(--warn)} .bad .dot{background:var(--bad)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:760px){.grid{grid-template-columns:1fr}}
+label{display:block;font-size:13px;color:var(--muted);margin:8px 0 3px}
+select,input,textarea{min-height:44px;width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px}
+textarea{min-height:56px;resize:vertical}
+.perf h3{margin:0 0 4px;font-size:17px} .perf.A h3{color:var(--a)} .perf.B h3{color:var(--b)}
+.seg{display:flex;gap:4px;flex-wrap:wrap} .seg button{flex:1;min-width:64px}
+button{min-height:44px;font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:8px 12px;cursor:pointer}
+button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--focus);outline-offset:1px}
+.big{font-size:18px;padding:12px 22px;border-radius:10px;background:var(--btn);color:var(--btn-ink);border-color:var(--btn)}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.note{font-size:13px;color:var(--muted);max-width:90ch}
+.vchk{font-size:13px;margin-top:4px} .vchk.ok{color:var(--ok)} .vchk.bad{color:var(--bad)} .vchk.warn{color:var(--warn)}
+.pipe{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
+.pipe div{background:var(--chip);border-radius:10px;padding:10px;text-align:center}
+.pipe b{display:block;font-size:24px}
+.state{font-size:20px;font-weight:600}
+.err{color:var(--bad);white-space:pre-wrap}
+.turn{border-top:1px solid var(--line);padding:10px 0}
+.turn .h{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;font-size:13px;color:var(--muted)}
+.turn .who{font-weight:700;font-size:15px} .turn.A .who{color:var(--a)} .turn.B .who{color:var(--b)}
+.turn p{margin:4px 0 0}
+.tag{background:var(--chip);border-radius:6px;padding:1px 6px}
+.tag.playing{background:var(--ok);color:#fff} .tag.generated_not_heard{background:var(--warn);color:#000}
+details summary{cursor:pointer;color:var(--muted)}
+.row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px} @media (max-width:760px){.row{grid-template-columns:1fr 1fr}}
+.label{background:var(--warn);color:#000;border-radius:8px;padding:6px 10px;margin:8px 0;font-size:14px}
+[dir=rtl]{text-align:right}
+</style>
+</head>
+<body>
+<main>
+  <div class="bar" role="region" aria-label="Controls">
+    <div class="controls">
+      <button class="big" id="btnStart" data-adhd="first-action">Start</button><span class="note" id="startHint">about 30 s until the first voice</span>
+      <button id="btnPause">Pause</button>
+      <button id="btnResume">Resume</button>
+      <button id="btnStop">Stop</button>
+      <span class="state" id="state">—</span>
+    </div>
+  </div>
+  <h1>Audible Debate</h1>
+  <p class="sub">Press Start: everything below is already filled in. Two performers argue out loud; their text is written ahead and voiced in order, so the sound runs without gaps.</p>
+
+  <section class="panel" aria-label="Health" data-adhd="item">
+    <h2>1 · Is everything ready? (green = yes)</h2>
+    <div class="health" id="health">Checking…</div>
+    <div class="controls" style="margin-top:10px">
+      <button id="btnStartVoices" hidden>Start voices</button>
+      <button id="btnRefresh">Refresh</button>
+      <button id="btnStopServer" title="Stops any sound, saves, and closes the background server">Stop server</button>
+      <span class="note">The debate runs in the background on this computer. Closing this tab does not stop the sound — use Stop.</span>
+    </div>
+    <div id="livePill" class="health" style="margin-top:8px"></div>
+    <div id="healthActions" class="note"></div>
+  </section>
+
+  <section class="panel" aria-label="Setup">
+    <h2>2 · Set up the performers</h2>
+    <label for="question">Question</label>
+    <textarea id="question">Can a machine change its mind?</textarea>
+    <div class="row">
+      <div><label for="language">Language</label>
+        <select id="language"><option value="en">English</option><option value="fa">فارسی (Persian)</option></select></div>
+      <div><label for="turns">Turns</label><input id="turns" type="number" min="1" max="20" value="6"></div>
+      <div><label for="mode">Sound</label>
+        <select id="mode"><option value="audible">Audible (speakers)</option><option value="silent">Silent rehearsal</option></select></div>
+      <div><label for="ceiling">Max seconds per turn</label><input id="ceiling" type="number" min="30" max="120" value="75"></div>
+    </div>
+    <div class="grid" style="margin-top:12px">
+      <div class="perf A" id="perfA"></div>
+      <div class="perf B" id="perfB"></div>
+    </div>
+    <p class="note">Tip: start with the same model for both performers, so you hear the personas, not two different models.</p>
+    <details><summary>More timing knobs</summary>
+      <div class="row">
+        <div><label for="gap">Silence between turns (s)</label><input id="gap" type="number" step="0.5" min="0" max="10" value="1.5"></div>
+        <div><label for="preroll">Voices ready before sound starts</label><input id="preroll" type="number" min="1" max="10" value="2"></div>
+        <div><label for="lookahead">Turns written ahead</label><input id="lookahead" type="number" min="0" max="10" value="3"></div>
+        <div><label for="maxpre">Longest wait before start (s)</label><input id="maxpre" type="number" min="5" max="600" value="90"></div>
+      </div>
+      <p class="note">“Turns written ahead” = 0 gives the old one-at-a-time behaviour (gaps while models think).</p>
+    </details>
+  </section>
+
+  <section class="panel" aria-label="Controls">
+    <h2>Now</h2>
+    <div id="labels"></div>
+    <div id="prep" class="note" style="margin-top:8px"></div>
+    <div class="pipe" aria-live="polite">
+      <div>written<b id="nWritten">0</b></div><div>voiced<b id="nVoiced">0</b></div><div>heard<b id="nHeard">0</b></div>
+    </div>
+    <div id="error" class="err"></div>
+    <details style="margin-top:10px"><summary>Cue the next turn · add silence</summary>
+      <div class="row">
+        <div><label for="cue">Cue (applies to the next turn still to be written)</label><select id="cue"></select></div>
+        <div><label for="cueNote">Cue note (some cues need one)</label><input id="cueNote"></div>
+        <div><label>&nbsp;</label><button id="btnCue">Send cue</button></div>
+        <div><label for="hold">Extra silence (s)</label><div class="controls"><input id="hold" type="number" min="1" max="30" value="3" style="width:80px"><button id="btnHold">Hold</button></div></div>
+      </div>
+    </details>
+    <p class="note" id="where"></p>
+  </section>
+
+  <section class="panel" aria-label="Transcript">
+    <h2>4 · Transcript</h2>
+    <div id="turnList" aria-live="polite"><p class="note">Nothing yet.</p></div>
+  </section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const api = async (path, body) => {
+  const r = await fetch(path, body === undefined ? {} : {method:"POST", headers:{"Content-Type":"application/json","X-Debate":"1"}, body:JSON.stringify(body)});
+  const j = await r.json().catch(() => ({error:"bad reply"}));
+  if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+  return j;
+};
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let SOURCES = [], VOICES = [], EFFORTS = ["none","low","medium","high"], STATUS = {}, LIVE = null;
+const liveOf = (sid, mid) => sid==="mock" ? {ok:true, seconds:0} : (LIVE?.results?.[sid]?.[mid] || null);
+function bestLive(sid){
+  const r = LIVE?.results?.[sid] || {};
+  return Object.entries(r).filter(([,v]) => v.ok).sort((a,b) => a[1].seconds - b[1].seconds).map(([k]) => k)[0];
+}
+function markModels(key){
+  const sid = $("#src"+key).value;
+  [...$("#model"+key).options].forEach(o => {
+    const l = liveOf(sid, o.value), base = o.dataset.label || (o.dataset.label = o.textContent);
+    o.textContent = (l ? (l.ok ? "✓ " : "✗ ") : "") + base + (l && l.ok && sid!=="mock" ? `  · ${l.seconds} s` : "") + (l && !l.ok ? "  · not answering" : "");
+  });
+  const cur = liveOf(sid, $("#model"+key).value), out = $("#mchk"+key);
+  if (cur && sid!=="mock"){ out.className = "vchk " + (cur.ok?"ok":"bad"); out.textContent = cur.ok ? `✓ Answered at ${LIVE.checked_at}, in ${cur.seconds} s` : `✗ Not answering (checked ${LIVE.checked_at}). Pick a ✓ model.`; }
+}
+function pickLive(key){
+  // keep his choice if it answers; otherwise move to the fastest live model (any working source)
+  const sid = $("#src"+key).value, cur = liveOf(sid, $("#model"+key).value);
+  const isAcct = (SOURCES.find(x => x.id===sid)||{}).kind === "account";
+  if (!LIVE || isAcct || (cur && cur.ok)) return markModels(key);  // his account choice is never moved
+  let s = sid, m = bestLive(sid);
+  if (!m) for (const x of SOURCES) { const b = bestLive(x.id); if (b){ s = x.id; m = b; break; } }
+  if (m){ $("#src"+key).value = s; fillModels(key, m); }
+  markModels(key);
+}
+async function loadLive(refresh){
+  $("#livePill").textContent = "Testing every free model once (about 30 s)…";
+  try{
+    LIVE = await api("/api/models/live"+(refresh?"?refresh=1":""));
+    $("#livePill").innerHTML = `<span class="pill ${LIVE.live?"ok":"bad"}"><span class="dot"></span>Models answering now: ${LIVE.live} of ${LIVE.total} (checked ${LIVE.checked_at})</span>`;
+    ["A","B"].forEach(pickLive); save();
+  }catch(e){ $("#livePill").textContent = "Model check failed: " + e.message; }
+}
+const store = {get(k,d){try{return JSON.parse(localStorage.getItem("debate:"+k)) ?? d}catch{return d}}, set(k,v){try{localStorage.setItem("debate:"+k, JSON.stringify(v))}catch{}}};
+
+function perfCard(key){
+  const el = $("#perf"+key);
+  el.innerHTML = `<h3>Performer ${key} · ${key==="A"?"The Examiner":"The Reframer"}</h3>
+    <label for="src${key}">Source</label><select id="src${key}"></select>
+    <label for="model${key}">Model (free)</label>
+    <div class="controls" style="flex-wrap:nowrap"><select id="model${key}"></select><button type="button" id="test${key}" title="Send one tiny request to see if this model answers right now">Test</button></div>
+    <div class="vchk" id="mchk${key}"></div>
+    <label style="font-weight:normal"><input type="checkbox" id="bk${key}" checked> If this model stops answering mid-debate, let a ✓ backup model finish the turn (marked BACKUP)</label>
+    <label>Thinking effort</label><div class="seg" id="eff${key}" role="group" aria-label="Effort ${key}"></div>
+    <div class="note" id="effnote${key}"></div>
+    <label for="voice${key}">Voice</label><select id="voice${key}"></select>
+    <div class="vchk" id="vchk${key}"></div>`;
+  $("#eff"+key).innerHTML = EFFORTS.map(e => `<button type="button" data-e="${e}" aria-pressed="false">${e}</button>`).join("");
+  $("#eff"+key).onclick = ev => { const b = ev.target.closest("button"); if(!b) return; setEffort(key, b.dataset.e); save(); };
+  $("#src"+key).onchange = () => { fillModels(key, bestLive($("#src"+key).value)); markModels(key); save(); };
+  $("#model"+key).onchange = () => { $("#mchk"+key).textContent = ""; markModels(key); save(); };
+  $("#test"+key).onclick = () => testModel(key);
+  $("#bk"+key).onchange = save;
+  $("#voice"+key).onchange = () => { checkVoice(key); save(); };
+}
+function setEffort(key, e){ document.querySelectorAll(`#eff${key} button`).forEach(b => b.setAttribute("aria-pressed", String(b.dataset.e===e))); }
+function getEffort(key){ return document.querySelector(`#eff${key} button[aria-pressed="true"]`)?.dataset.e || "none"; }
+
+function fillSources(key, want){
+  const sel = $("#src"+key);
+  const opt = s => {
+    const n = (s.models||[]).length, st = s.status, acct = s.kind==="account";
+    const tag = st==="ok" ? `${n} model${n===1?"":"s"}${acct?" · uses your limits":" free"}` : st==="needs_key" ? "needs key" : st==="offline" ? (s.login?"not signed in":"offline") : st;
+    return `<option value="${esc(s.id)}" ${st!=="ok"?"disabled":""} title="${esc(s.action||s.note||"")}">${esc(s.label)} — ${esc(tag)}</option>`;
+  };
+  const acc = SOURCES.filter(s => s.kind==="account"), free = SOURCES.filter(s => s.kind!=="account");
+  sel.innerHTML = `<optgroup label="Your accounts (Claude, Antigravity)">${acc.map(opt).join("")}</optgroup>` +
+                  `<optgroup label="Free models">${free.map(opt).join("")}</optgroup>`;
+  const ok = SOURCES.filter(s => s.status==="ok");
+  const pick = SOURCES.find(s => s.id===want && s.status==="ok") || ok.find(s => s.id!=="mock" && s.kind!=="account") || ok[0];
+  if (pick) sel.value = pick.id;
+  fillModels(key);
+}
+function fillModels(key, want){
+  const s = SOURCES.find(x => x.id === $("#src"+key).value) || {models:[]};
+  const sel = $("#model"+key);
+  sel.innerHTML = (s.models||[]).map(m => `<option value="${esc(m.id)}" title="${esc(m.why_free)}">${esc(m.id)}${m.router?"  (router: picks a model for you)":""}</option>`).join("");
+  const ids = (s.models||[]).map(m => m.id);
+  const pref = (s.preferred_models||[]).find(m => ids.includes(m));
+  if (want && ids.includes(want)) sel.value = want; else if (pref) sel.value = pref;
+  const n = $("#effnote"+key);
+  if (n) n.textContent = s.effort_in_model ? "Antigravity: effort picks the model's -low / -medium / -high version (none = low)."
+    : s.kind==="account" ? "Uses your subscription limits. Not auto-tested; press Test once." : "";
+}
+function fillVoices(key, want){
+  const lang = $("#language").value;
+  const sel = $("#voice"+key);
+  const groups = {local:"On this laptop", derived:"On this laptop (shifted)", cloud:"Online (free tiers)", test:"Test"};
+  const by = {};
+  VOICES.forEach(v => (by[v.kind] = by[v.kind] || []).push(v));
+  sel.innerHTML = Object.keys(groups).filter(g => by[g]).map(g => `<optgroup label="${groups[g]}">` +
+    by[g].map(v => `<option value="${esc(v.id)}" data-lang="${esc(v.lang)}">${esc(v.label)} · ${esc(v.lang)}${v.gender?" · "+esc(v.gender):""}</option>`).join("") + `</optgroup>`).join("");
+  const defaults = lang==="fa" ? {A:"amir", B:"mana"} : {A:"en_david", B:"en_zira"};
+  const ids = VOICES.map(v => v.id);
+  sel.value = ids.includes(want) ? want : (ids.includes(defaults[key]) ? defaults[key] : "placeholder");
+}
+async function testModel(key){
+  const out = $("#mchk"+key); out.className = "vchk"; out.textContent = "Asking this model once…";
+  try{
+    const r = await api("/api/models/test", {source:$("#src"+key).value, model:$("#model"+key).value});
+    if (r.ok){ out.className = "vchk ok"; out.textContent = `✓ Answers now, in ${r.seconds} s` + (r.served_model && !$("#model"+key).value.endsWith(r.served_model) ? ` (served by ${r.served_model})` : ""); }
+    else { out.className = "vchk bad"; out.textContent = `✗ Not answering right now (${r.seconds} s). Pick another model and press Test.`; }
+  }catch(e){ out.className = "vchk bad"; out.textContent = "✗ " + e.message; }
+}
+async function checkVoice(key){
+  const v = $("#voice"+key).value, lang = $("#language").value, out = $("#vchk"+key);
+  const vlang = $("#voice"+key).selectedOptions[0]?.dataset.lang;
+  const mismatch = vlang && vlang!=="any" && vlang!==lang;
+  if (v === "placeholder"){ out.className="vchk warn"; out.textContent = "Silent placeholder: nothing will be heard."; return; }
+  out.className = "vchk"; out.textContent = "Checking this voice silently…";
+  try{
+    const r = await api("/api/voices/check", {voice:v, language:lang});
+    if (r.ok){ out.className = "vchk " + (mismatch?"warn":"ok");
+      out.textContent = `✓ Real speech · ${r.words_per_second} words/s · made in ${r.synth_s}s` + (mismatch? ` · warning: this is a ${vlang} voice, debate language is ${lang}`:""); }
+    else { out.className = "vchk bad"; out.textContent = "✗ This voice did not return speech: " + (r.reason || "silent audio") + ". Pick another voice."; }
+  }catch(e){ out.className="vchk bad"; out.textContent = "✗ " + e.message; }
+}
+
+function save(){
+  store.set("form", {question:$("#question").value, language:$("#language").value, turns:$("#turns").value, mode:$("#mode").value,
+    ceiling:$("#ceiling").value, gap:$("#gap").value, preroll:$("#preroll").value, lookahead:$("#lookahead").value, maxpre:$("#maxpre").value,
+    A:{src:$("#srcA").value, model:$("#modelA").value, eff:getEffort("A"), voice:$("#voiceA").value, bk:$("#bkA").checked},
+    B:{src:$("#srcB").value, model:$("#modelB").value, eff:getEffort("B"), voice:$("#voiceB").value, bk:$("#bkB").checked}});
+}
+
+async function loadHealth(refresh){
+  $("#health").textContent = "Checking…";
+  const [h, srcs, voices] = await Promise.all([api("/api/health"+(refresh?"?refresh=1":"")), api("/api/sources"), api("/api/voices")]);
+  SOURCES = srcs; VOICES = voices.voices || [];
+  const pills = [];
+  const okSrc = srcs.filter(s => s.status==="ok" && s.id!=="mock");
+  pills.push(`<span class="pill ${okSrc.length?"ok":"bad"}"><span class="dot"></span>Model sources: ${okSrc.length} working</span>`);
+  srcs.filter(s => s.id!=="mock").forEach(s => pills.push(`<span class="pill ${s.status==="ok"?"ok":s.status==="needs_key"?"warn":"bad"}" title="${esc(s.action||s.reason||s.note||"")}"><span class="dot"></span>${esc(s.label)}: ${s.status==="ok"?(s.models.length+" free"):esc(s.status.replace("_"," "))}</span>`));
+  pills.push(`<span class="pill ${voices.status==="up"?"ok":"bad"}"><span class="dot"></span>Voices (Line Machine): ${voices.status==="up"?VOICES.length-1+" voices":"not running"}</span>`);
+  pills.push(`<span class="pill ${h.player.audible_available?"ok":"warn"}"><span class="dot"></span>Speakers: ${h.player.audible_available?"ready":"silent only"}</span>`);
+  pills.push(`<span class="pill ok"><span class="dot"></span>Server running in the background</span>`);
+  $("#health").innerHTML = pills.join("");
+  $("#btnStartVoices").hidden = voices.status === "up";
+  const acts = [];
+  if (voices.status !== "up") acts.push("Voices are off → press <b>Start voices</b>, wait about a minute, then press Refresh.");
+  srcs.filter(s => s.login && s.status!=="ok").forEach(s => acts.push(`${esc(s.label)} is not signed in. One time: double-click <b>${esc(s.login.split("/").pop())}</b> in <code>${esc(s.login.replace(/\/[^/]+$/,"").replaceAll("/","\\"))}</code>, sign in with that account, then press Refresh.`));
+  const keyed = srcs.filter(s => s.status==="needs_key");
+  if (keyed.length) acts.push(`${keyed.map(s => esc(s.label)).join(" and ")} need a key (${esc(keyed[0].key_env)}). Ask Jimmy to connect it. Everything else works without it.`);
+  if (!okSrc.length) acts.push("No live model source → open Kilo / LM Studio, then press Refresh. You can still rehearse with the offline script.");
+  $("#healthActions").innerHTML = acts.map(a => "• " + a).join("<br>");
+  const f = store.get("form", {});
+  ["A","B"].forEach(k => { fillSources(k, f[k]?.src); fillModels(k, f[k]?.model); fillVoices(k, f[k]?.voice); setEffort(k, f[k]?.eff || "none"); $("#bk"+k).checked = f[k]?.bk ?? true; });
+  // same model for both performers first (owner rule)
+  if (!f.B) { $("#srcB").value = $("#srcA").value; fillModels("B", $("#modelA").value); }
+  checkVoice("A"); checkVoice("B");
+  loadLive(refresh);
+}
+
+async function start(){
+  $("#error").textContent = "";
+  save();
+  const body = {question:$("#question").value, language:$("#language").value, turns:+$("#turns").value, mode:$("#mode").value,
+    max_turn_seconds:+$("#ceiling").value, gap_seconds:+$("#gap").value, preroll_min:+$("#preroll").value,
+    lookahead:+$("#lookahead").value, max_preroll_s:+$("#maxpre").value,
+    performers:{A:{source:$("#srcA").value, model:$("#modelA").value, effort:getEffort("A"), voice:$("#voiceA").value, backup:$("#bkA").checked},
+                B:{source:$("#srcB").value, model:$("#modelB").value, effort:getEffort("B"), voice:$("#voiceB").value, backup:$("#bkB").checked}}};
+  try{ await api("/api/session", body); render(await api("/api/action", {action:"start"})); }
+  catch(e){ $("#error").textContent = e.message; }
+}
+async function act(a, extra){ $("#error").textContent=""; try{ render(await api("/api/action", Object.assign({action:a}, extra||{}))); }catch(e){ $("#error").textContent = e.message; } }
+
+const WORDS = {none:"Not set up yet", ready:"Ready", running:"Running", paused:"Paused — sound and writing are frozen", stopped:"Stopped",
+  completed:"Finished", error:"Stopped by an error", closed:"Closed"};
+function render(s){
+  STATUS = s;
+  $("#state").textContent = WORDS[s.state] || s.state;
+  const allowed = new Set(s.allowed || []);
+  const running = s.state==="running" || s.state==="paused";
+  $("#btnStart").disabled = running;
+  $("#btnStart").textContent = (s.state==="none"||s.state==="ready") ? "Start" : "Start a new debate";
+  $("#btnPause").disabled = !allowed.has("pause");
+  $("#btnResume").disabled = !allowed.has("resume");
+  $("#btnStop").disabled = !allowed.has("stop");
+  $("#nWritten").textContent = `${s.written ?? 0}/${s.turns_total ?? 0}`;
+  $("#nVoiced").textContent = `${s.voiced ?? 0}/${s.turns_total ?? 0}`;
+  $("#nHeard").textContent = `${s.heard ?? 0}/${s.turns_total ?? 0}`;
+  const p = s.preroll || {};
+  let prep = "";
+  if (s.state==="running" && p.state==="preparing"){
+    prep = `Preparing: ${p.ready ?? 0} of ${p.needed_min ?? "?"} voices ready` + (p.eta_s!=null ? ` · sound starts in about ${Math.max(1, Math.round(p.eta_s))} s` : " · waiting for the first model reply") +
+           ` · waited ${Math.round(p.elapsed_s||0)} s (starts anyway at ${p.max_preroll_s} s)`;
+  } else if (s.state==="running" && s.stages){
+    prep = `Now: ${esc(s.stages.player)} · writer: ${esc(s.stages.writer)} · voices: ${esc(s.stages.voicer)}`;
+  } else if (p.state==="done"){ prep = `Sound started after ${Math.round(p.preroll_s||0)} s of preparation` + (p.capped?" (started at the time limit; short waits between turns may happen)":""); }
+  $("#prep").innerHTML = prep;
+  $("#labels").innerHTML = s.labels && s.labels.any ? `<div class="label">${esc(s.labels.label)}</div>` : (s.mode==="silent" && s.state!=="none" ? `<div class="label">Silent rehearsal: nothing is played on the speakers.</div>` : "");
+  $("#error").textContent = s.last_error ? ("What went wrong: " + s.last_error + "\nWhat to do: press Test next to each model, pick one that answers, then press Start again.") : "";
+  $("#where").textContent = s.session_dir ? "Saved automatically in: " + s.session_dir : "";
+  const cueSel = $("#cue"); if (s.cues && !cueSel.options.length) cueSel.innerHTML = s.cues.map(c => `<option>${esc(c)}</option>`).join("");
+  const rtl = $("#language").value === "fa";
+  const list = (s.turns||[]).slice().reverse();
+  $("#turnList").innerHTML = list.length ? list.map(t => `<div class="turn ${t.speaker}">
+     <div class="h"><span class="who">${t.speaker}</span><span class="tag ${esc(t.status)}">${esc(t.status.replaceAll("_"," "))}</span>
+     ${t.duration_s!=null?`<span>${t.duration_s.toFixed(1)} s audio</span>`:""}${t.write_s!=null?`<span>written in ${t.write_s.toFixed(1)} s</span>`:""}
+     ${t.voice_s!=null?`<span>voiced in ${t.voice_s.toFixed(1)} s</span>`:""}${t.undesigned_wait_s>0.05?`<span>waited ${t.undesigned_wait_s.toFixed(1)} s</span>`:""}
+     <span>${esc(t.model||"")}</span>${(t.flags||[]).map(f=>`<span class="tag">${esc(f.replaceAll("_"," "))}</span>`).join("")}</div>
+     <p ${rtl?'dir="rtl"':''}>${esc(t.text)}</p></div>`).join("") : `<p class="note">Nothing yet.</p>`;
+}
+
+async function poll(){ try{ render(await api("/api/status")); }catch(e){ $("#state").textContent = "Server not answering — double-click START-DEBATE again"; } setTimeout(poll, 700); }
+
+perfCard("A"); perfCard("B");
+const f0 = store.get("form", null);
+if (f0){ ["question","language","turns","mode","ceiling","gap","preroll","lookahead","maxpre"].forEach(k => { if (f0[k]!=null) $("#"+k).value = f0[k]; }); }
+["question","turns","mode","ceiling","gap","preroll","lookahead","maxpre"].forEach(k => $("#"+k).addEventListener("change", save));
+$("#language").onchange = () => { fillVoices("A"); fillVoices("B"); checkVoice("A"); checkVoice("B"); save(); };
+$("#btnStart").onclick = start;
+$("#btnPause").onclick = () => act("pause");
+$("#btnResume").onclick = () => act("resume");
+$("#btnStop").onclick = () => act("stop");
+$("#btnCue").onclick = () => act("cue", {technique:$("#cue").value, note:$("#cueNote").value});
+$("#btnHold").onclick = () => act("hold", {seconds:+$("#hold").value});
+$("#btnRefresh").onclick = () => loadHealth(true);
+$("#btnStartVoices").onclick = async () => { $("#btnStartVoices").textContent = "Starting voices (about a minute)…"; await api("/api/voices/start", {}).catch(()=>{});
+  for (let i=0;i<30;i++){ await new Promise(r=>setTimeout(r,3000)); const v = await api("/api/voices").catch(()=>({})); if (v.status==="up") break; }
+  $("#btnStartVoices").textContent = "Start voices"; loadHealth(false); };
+$("#btnStopServer").onclick = async () => { if (!confirm("Stop any sound, save, and close the background server?")) return;
+  await api("/api/shutdown", {}).catch(()=>{}); document.body.innerHTML = '<main><h1>Server stopped</h1><p>Everything was saved. Double-click START-DEBATE to start again.</p></main>'; };
+loadHealth(false).catch(e => { $("#health").textContent = "Could not reach the server: " + e.message; });
+poll();
+</script>
+</body>
+</html>

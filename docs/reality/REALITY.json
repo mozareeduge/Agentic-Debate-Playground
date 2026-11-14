@@ -1,0 +1,202 @@
+{
+  "schema": "reality-contract/1",
+  "work": "Audible Debate of Agents v1: text-ahead pipeline, per-performer model/effort/source, Line Machine voices, ready-to-use page",
+  "owner": "Mohammad",
+  "author": "Jimmy in Claude Code (Opus 5.5), session 2026-11-14",
+  "_order": "needs -> reality_gate.py freeze -> design (after freeze) -> independent R1 (r1_report + checked_at) -> build -> independent R2. Run reality_gate.py next REALITY.json",
+  "needs": [
+    {
+      "id": "N1",
+      "verbatim": "llm calls + TTS call + other parts of the project have their own time/latency that in summation it may make the performance slow and seeming interrupted. I suggest keeping the discussion between agent go through text sooner; even sooner than start of TTS ... the interface starts playing the debate later ... when it has a few voices to play ... and the performance goes on without interruption.",
+      "source": "Claude Code chat 2026-11-14 (OM-907)",
+      "situation": "A listener (the owner in rehearsal, later an audience) hears the two performers speak in turn. Each turn's text comes from a free remote or local model (3-60 s) and then a voice engine (1-20 s).",
+      "today": "v0 is serial by design: turn N+1 is only requested after turn N has finished playing, so every model call plus synthesis is heard as dead air between turns (cloud packet REVIEW_PACKET.md; controller.py docstring 'v0 does NOT pre-generate').",
+      "success_in_reality": "After one announced pre-roll at the start, the listener hears turn after turn separated only by the designed gap; no turn waits on a model or a voice engine.",
+      "probe": "Run a 6-turn debate with a real free model and real Line Machine voices; read the per-turn undesigned wait (underrun) from the session metrics after the first turn.",
+      "metric": "max underrun after the first turn in seconds (target 0, accept <= 0.5); pre-roll length in seconds",
+      "checked_at": "2026-11-14T00:15:16"
+    },
+    {
+      "id": "N2",
+      "verbatim": "use local machine capabilities + all our free sources of models -> selectable for agent with: model - effort - source",
+      "source": "Claude Code chat 2026-11-14 (OM-907)",
+      "situation": "Preparing or rehearsing, the owner wants to try a different free model, source or thinking effort for performer A and for performer B, and compare, without editing code or typing commands.",
+      "today": "One --endpoint and one --model for both performers, typed on a command line; only LM Studio was considered and it is not running on this laptop; the machine's free gateways (Kilo free, OpenCode Zen free, Cline free via 9router) are unused.",
+      "success_in_reality": "On one page he picks, for A and for B separately, a source, a model from the live list of what that source actually offers for free right now, and an effort; the session record names exactly what each performer used, including the model actually served.",
+      "probe": "Open the page, choose two different sources for A and B, start, then open the session's config.json and turn records.",
+      "metric": "clicks to set both performers; number of live free sources and models listed; mismatch between chosen and recorded (target 0)",
+      "checked_at": "2026-11-14T00:15:16"
+    },
+    {
+      "id": "N3",
+      "verbatim": "use Line machine capabilities",
+      "source": "Claude Code chat 2026-11-14 (OM-907)",
+      "situation": "The performers should speak with voices the owner already has and knows: the Line Machine's Persian and English voices (local Piper, Windows, and its free cloud voices).",
+      "today": "The debate prototype has only silent placeholder audio and an untested Piper wrapper; the Line Machine already serves voices over /api/speak but the debate cannot reach it.",
+      "success_in_reality": "He picks a Line Machine voice for each performer; the debate speaks with those voices; each turn's length is measured from the real audio file and never exceeds the ceiling.",
+      "probe": "Start a session with two Line Machine voices; check each turn's WAV is real speech from Line Machine (engine field, non-silent samples) and duration_s <= ceiling via `verify`.",
+      "metric": "turns with real speech / total; turns over ceiling (target 0)",
+      "checked_at": "2026-11-14T00:15:16"
+    },
+    {
+      "id": "N4",
+      "verbatim": "never claim the pilot works because two requests returned text or two WAVs were synthesized; a valid pilot needs human-controlled continuous two-way audition, timing enforcement, persistence, preserved evidence (owner stop condition, HANDOFF_JIMMY.md section 4.4)",
+      "source": "docs/HANDOFF_JIMMY.md 4.3-4.4",
+      "situation": "With turns now prepared ahead, the operator presses Pause or Stop during speech or while text is still being written for later turns, on this Windows laptop.",
+      "today": "On Windows, Pause freezes the clock but not the sound (SIGSTOP does not exist); a text-ahead queue would also add the risk that queued turns keep sounding after Stop.",
+      "success_in_reality": "Pause silences the sound at once and nothing new is written or voiced while paused; Stop silences at once and no queued turn is ever heard afterwards; a restarted app never plays by itself; everything is saved.",
+      "probe": "Silent device test: play a silent WAV through the Windows player, pause, resume, stop, read device state and timing; controller tests with a full queue: stop and pause during speech and during generation.",
+      "metric": "stop-to-silence latency ms; turns heard after Stop (target 0); work done while paused (target 0)",
+      "checked_at": "2026-11-14T00:15:16"
+    },
+    {
+      "id": "N5",
+      "verbatim": "make it finalize -> ready to be used",
+      "source": "Claude Code chat 2026-11-14 (OM-907)",
+      "situation": "The owner is not technical, may be interrupted, and opens the work later alone.",
+      "today": "Running it needs git, PowerShell commands, flags and reading JSON.",
+      "success_in_reality": "He double-clicks one file, a page opens, he chooses performers and voices and presses Start; a short run-book tells him what he should hear and what to do if not.",
+      "probe": "A fresh reader follows only the run-book's first card from double-click to the first turn heard.",
+      "metric": "minutes to first heard turn; questions he had to ask (target 0)",
+      "checked_at": "2026-11-14T00:15:16"
+    }
+  ],
+  "design": "DESIGN.md",
+  "build_artifacts": [
+    "../../audible_debate/sources.py",
+    "../../audible_debate/linemachine.py",
+    "../../audible_debate/winplay.py",
+    "../../audible_debate/web.py",
+    "../../audible_debate/static/index.html",
+    "../../START-DEBATE.bat",
+    "../RUNBOOK.html"
+  ],
+  "r1_report": "R1_REPORT.md",
+  "r1": {
+    "N1": {
+      "design_part": "DESIGN.md Revision 2 N1 + Revision 3 item 1: adaptive pre-roll need_s=(P-H)*turns_left clamped to supply, buffering past lookahead before playback, countdown, preroll_capped, retry, T20 deficit over 3 turns",
+      "walkthrough": "6-turn silent rehearsal with real free model, real Line Machine synthesis, silent clock; read undesigned_wait_s and max_underrun_after_first_s; page countdown shows pre-roll",
+      "failure_risks": "P overestimated (safe side); pre-roll may reach the 90 s cap and then preroll_capped reports likely underruns (visible miss); lookahead 3 after start must absorb a 17 s write",
+      "cut_for_words": "nothing; lookahead=0/preroll=1 is a labelled v0 comparison",
+      "verdict": "met",
+      "evidence": "R1_REPORT.md section N1; DESIGN.md Revision 3 item 1; round-2 deadlock closed",
+      "independent_reader": "Sonnet 5.5 subagent (fresh, R1 round 3)",
+      "checked_at": "2026-11-14T00:20:25"
+    },
+    "N2": {
+      "design_part": "DESIGN.md Revision 2 N2 + Revision 3 item 7: sources.json free rules, key_env/key_file, parallel discovery, chosen vs served model, router exemption; agent does not read secrets",
+      "walkthrough": "open page, pick source/model/effort for A and B (about 6 clicks, 0 for defaults), Start, read config.json and turns for chosen_model/served_model; Kilo free works keylessly",
+      "failure_risks": "Zen/Cline lanes need owner-chosen key_file; needs-key row must give a plain action sentence; suffix rule for Zen/Cline unverified, reason shown",
+      "cut_for_words": "nothing",
+      "verdict": "met",
+      "evidence": "R1_REPORT.md section N2; DESIGN.md Revision 3 item 7",
+      "independent_reader": "Sonnet 5.5 subagent (fresh, R1 round 3)",
+      "checked_at": "2026-11-14T00:20:25"
+    },
+    "N3": {
+      "design_part": "DESIGN.md Revision 2 N3 + Revision 3 item 6: LineMachineTTS, RIFF check, per-turn engine/voice/rms/peak/speech_like, silent per-voice test line, language mismatch warning, verify counts",
+      "walkthrough": "pick two voices, silent test per voice turns green/red, Start, each turn measured from final WAV, verify prints turns over ceiling and speech_like count",
+      "failure_risks": "speech_like is not intelligibility (audible check pending in HOST_ACCEPTANCE); voice test adds a few seconds before Start",
+      "cut_for_words": "nothing",
+      "verdict": "met",
+      "evidence": "R1_REPORT.md section N3; DESIGN.md Revision 3 item 6",
+      "independent_reader": "Sonnet 5.5 subagent (fresh, R1 round 3)",
+      "checked_at": "2026-11-14T00:20:25"
+    },
+    "N4": {
+      "design_part": "DESIGN.md N4 MciPlayer + Revision 2 N4 (paused = no new request starts, stop_latency_ms<=150, T17-T19) + Revision 3 item 5 (HOST_ACCEPTANCE.md pending audible checks)",
+      "walkthrough": "silent WAV (and a real Line Machine WAV) through winmm pause/resume/stop with device state and timing; controller tests with full queue; restart in ready; audible freeze/stop recorded as pending owner-permitted checks",
+      "failure_risks": "Stop server must stop playback before the server (build detail)",
+      "cut_for_words": "nothing",
+      "verdict": "met",
+      "evidence": "R1_REPORT.md section N4; DESIGN.md Revision 3 item 5",
+      "independent_reader": "Sonnet 5.5 subagent (fresh, R1 round 3)",
+      "checked_at": "2026-11-14T00:20:25"
+    },
+    "N5": {
+      "design_part": "DESIGN.md Revision 2 N5 + Revision 3 items 2-4: START-DEBATE.bat with Python check and server reuse, hidden server, Stop server button, health strip, defaults, Audible default for human launch, symptom-keyed run-book, countdown",
+      "walkthrough": "double-click, page opens, health green, defaults set with mode Audible, press Start, countdown, first turn heard from speakers; fresh reader follows card 1",
+      "failure_risks": "hidden server hides crashes (bat must wait for port and write server.log); closing tab does not stop sound (say so); up to about 90 s to first turn, countdown covers it",
+      "cut_for_words": "run-book card wording (structure specified, written in build, testable at R2)",
+      "verdict": "met",
+      "evidence": "R1_REPORT.md section N5; DESIGN.md Revision 3 items 2-4",
+      "independent_reader": "Sonnet 5.5 subagent (fresh, R1 round 3)",
+      "checked_at": "2026-11-14T00:20:25"
+    }
+  },
+  "r2": {
+    "N1": {
+      "actual": "Live English 6-turn run (silent clock, real kilo-free model, real Line Machine voices): after turn 1 every turn has undesigned_wait_s 0.0; turn 1 waited 22.29 s as the announced pre-roll. Write times 8-41 s did not surface as gaps. Persian 4-turn run: same, pre-roll 40.2 s. Playback was a silent clock, so the gap-free feel through speakers is unheard.",
+      "metric_value": "max underrun after first turn 0.0 s (both sessions); pre-roll 22.3 s (EN), 40.2 s (FA)",
+      "verdict": "met",
+      "evidence": "sessions/20261113T210447Z-7f7b8b and 20261113T211400Z-77a253: metrics beat.max_underrun_after_first_s=0.0; turns/*.json undesigned_wait_s; tests T20/T21 pass. Pending: audible audition (HOST_ACCEPTANCE card A).",
+      "checked_by": "Sonnet 5.5 subagent (fresh, R2)",
+      "checked_at": "2026-11-14T01:00:01"
+    },
+    "N2": {
+      "actual": "The page has per-performer Source, Model (live free list), Effort and Voice selects. sources lists kilo-free (11 free models live), opencode-zen-free (3 models, needs 9router key, not set), cline-free (0, needs key), lmstudio and ollama offline. Records name chosen and served model per turn, 0 mismatches. Both live sessions used the same source and model for A and B, so 'two different sources for A and B' was never run live; only unit test T24 covers different performers. I did not open the page (no browser allowed), so click count is unmeasured.",
+      "metric_value": "1 live usable keyless source (kilo-free, 11 models); 2 more need a key; chosen vs recorded mismatch 0 in 10 live turns; clicks unmeasured",
+      "verdict": "partly",
+      "evidence": "audible_debate/static/index.html lines 152-157 (per-performer pickers), web.py lines 120-134; 'python -m audible_debate sources' output; sessions/*/config.json performers and turns/*.json chosen_model/served_model/served_mismatch=false; tests/test_pipeline.py T24. Missing: live A/B on different sources; keyed sources unavailable.",
+      "checked_by": "Sonnet 5.5 subagent (fresh, R2)",
+      "checked_at": "2026-11-14T01:00:01"
+    },
+    "N3": {
+      "actual": "Both live sessions: every turn engine line-machine, voices en_david/en_zira and amir/mana chosen per performer, 10 of 10 turns speech_like, durations 15.6-43.6 s vs ceilings 45/40, 0 over. One turn (t06B) first exceeded the ceiling at 45.59 s and was shortened and re-voiced, recorded as residue. Whether it sounds right to the owner is unheard.",
+      "metric_value": "10/10 turns real speech; 0 turns over ceiling; max 43.59 s (ceiling 45)",
+      "verdict": "met",
+      "evidence": "python -m audible_debate verify on both sessions: ok=true, problems=[], speech_like_turns 6 and 4, engines ['line-machine']; turns/*.json tts_engine, voice, audio_analysis.speech_like, duration_s; residue.jsonl ceiling_shortened_text.",
+      "checked_by": "Sonnet 5.5 subagent (fresh, R2)",
+      "checked_at": "2026-11-14T01:00:01"
+    },
+    "N4": {
+      "actual": "Real Windows MCI device with a silent WAV: pause froze device position (test T25; event log pause at 1.579 s, resume at 1.612 s); stop latency 42.86 ms (device 42.17 ms), worker_cancelled logged, state saved, then quit. Controller tests T17 (stop with full queue, no plays after), T18 (pause starts no new request), T19 (restart never autoplays) pass. Session 50fbee used the mock script and 4 queued turns, none played after stop. Never heard through speakers: that stop silences audibly is inferred from device state, and no live-model session was stopped mid-queue.",
+      "metric_value": "stop-to-silence 42.9 ms (device closed); turns heard after Stop 0; work done while paused 0 (unit test T18)",
+      "verdict": "met",
+      "evidence": "sessions/20261113T210912Z-50fbee/events.jsonl seq 18-22; tests/test_pipeline.py lines 112-157 and 382-412; python -m unittest: 40 tests OK. Pending: audible pause/stop (HOST_ACCEPTANCE B, C).",
+      "checked_by": "Sonnet 5.5 subagent (fresh, R2)",
+      "checked_at": "2026-11-14T01:00:01"
+    },
+    "N5": {
+      "actual": "START-DEBATE.bat is a single double-click: checks for a running server, finds pythonw/pyw, starts it hidden, waits up to 20 s, opens http://127.0.0.1:4797/, and prints plain instructions if Python is missing. Run-book card 1 has 3 steps with 'you should see' and 'if not' lines, plus 5 more cards and tick boxes that survive interruption. I could not execute the .bat or open the page (silent-only rules) and no fresh reader has done it, so minutes to first heard turn and questions asked are unmeasured. Several fallbacks end with 'tell Jimmy', and cold start of the voices is unproven.",
+      "metric_value": "minutes to first heard turn: not measured (page promises about 20-40 s after Start); questions asked: not measured",
+      "verdict": "partly",
+      "evidence": "START-DEBATE.bat lines 1-45; docs/RUNBOOK.html cards 1-6; index.html controls (Start, Pause, Resume, Stop, Start voices, Stop server); HOST_ACCEPTANCE.md pending card A. No evidence of a fresh-reader walk.",
+      "checked_by": "Sonnet 5.5 subagent (fresh, R2)",
+      "checked_at": "2026-11-14T01:00:01"
+    }
+  },
+  "frozen": {
+    "at": "2026-11-14T00:12:19",
+    "needs_sha": "45972e920218408d63e2797d894583d427cda645b8033eacbc993e82551a96ba"
+  },
+  "r1_history": [
+    {
+      "round": 1,
+      "report": "R1_REPORT_round1.md",
+      "verdicts": {
+        "N1": "partly",
+        "N2": "partly",
+        "N3": "partly",
+        "N4": "partly",
+        "N5": "partly"
+      },
+      "checked_at": "2026-11-14T00:15:16"
+    },
+    {
+      "round": 2,
+      "report": "R1_REPORT_round2.md",
+      "verdicts": {
+        "N1": "met",
+        "N2": "met",
+        "N3": "met",
+        "N4": "met",
+        "N5": "partly"
+      },
+      "checked_at": "2026-11-14T00:18:22"
+    }
+  ],
+  "r1_checked_at": "2026-11-14T00:20:25",
+  "build_note": "The pipeline lives in audible_debate/controller.py (_run_pipeline, _preroll). That file came with the clone (created before the needs freeze) and was MODIFIED after R1 (last modified 2026-11-14T00:30:14), so it is not listed as a created artifact; the gate reads creation times. Its changes are in commits e1748fe and later.",
+  "r2_checked_at": "2026-11-14T01:00:01"
+}

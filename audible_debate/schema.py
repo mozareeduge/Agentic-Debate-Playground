@@ -45,6 +45,7 @@ class Reply:
     analogy: bool
     verified_source_ids: list[str] = field(default_factory=list)
     unverified_citations: list[str] = field(default_factory=list)
+    repaired: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return dict(self.__dict__)
@@ -77,36 +78,88 @@ def clean_for_speech(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+_MOVE_ALIASES = {"opening": "assert", "open": "assert", "claim": "assert", "answer": "assert",
+                 "challenge": "object", "objection": "object", "rebut": "object", "counter": "object",
+                 "agree": "concede", "refine": "qualify", "closing": "end", "close": "end", "ask": "question"}
+
+
+_STR_FIELD = r'"{k}"\s*:\s*("(?:[^"\\]|\\.)*")'
+
+
+def _salvage(raw: str) -> dict:
+    """A free model often runs out of tokens after a complete utterance (2026-11-14 live: 4 of 4 failures).
+    Keep every field whose value arrived whole; the utterance itself must be a closed string."""
+    m = re.search(_STR_FIELD.format(k="utterance"), raw, re.S)
+    if not m:
+        raise ReplyInvalid("no JSON object in model output")
+    obj = {"utterance": json.loads(m.group(1))}
+    for k in ("move", "addresses", "position_shift", "uncertainty"):
+        mk = re.search(_STR_FIELD.format(k=k), raw, re.S)
+        if mk:
+            obj[k] = json.loads(mk.group(1))
+    return obj
+
+
+def _level(v) -> str | None:
+    """0.0-1.0 or 1-10 numbers -> low/medium/high."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    x = v / 10 if v > 1 else v
+    return "low" if x < 0.34 else "medium" if x < 0.67 else "high"
+
+
 def parse_reply(raw: str, allowed_source_ids: set[str]) -> Reply:
-    obj = _extract_json(raw)
-    missing = [k for k in REPLY_JSON_SCHEMA["required"] if k not in obj]
-    if missing:
-        raise ReplyInvalid(f"missing fields: {missing}")
-    def _str(k):
-        if not isinstance(obj[k], str):
-            raise ReplyInvalid(f"{k} must be a string")
-        return obj[k].strip()
-    utterance = clean_for_speech(_str("utterance"))
+    """The spoken text is strict (must be a non-empty string). The cue labels around it are repaired
+    when a free model sends null, a number or a near-synonym; every repair is listed in `repaired`."""
+    repaired: list[str] = []
+    try:
+        obj = _extract_json(raw)
+    except ReplyInvalid:
+        obj = _salvage(raw)   # raises ReplyInvalid again when no complete utterance is there
+        repaired.append("reply was cut off after the spoken text; labels filled from what arrived")
+    if not isinstance(obj.get("utterance"), str):
+        raise ReplyInvalid("utterance missing or not a string")
+    utterance = clean_for_speech(obj["utterance"].strip())
     if not utterance:
         raise ReplyInvalid("empty utterance")
-    move, shift, unc = _str("move"), _str("position_shift"), _str("uncertainty")
-    if move not in MOVES:
-        raise ReplyInvalid(f"move '{move}' not in {MOVES}")
-    if shift not in SHIFTS:
-        raise ReplyInvalid(f"position_shift '{shift}' not in {SHIFTS}")
-    if unc not in UNCERTAINTY:
-        raise ReplyInvalid(f"uncertainty '{unc}' not in {UNCERTAINTY}")
-    sids = obj["source_ids"]
+
+    def _enum(k, allowed, default, alias=None, numeric=False):
+        v = obj.get(k)
+        if isinstance(v, str) and v.strip().lower() in allowed:
+            return v.strip().lower()
+        if isinstance(v, str) and alias and v.strip().lower() in alias:
+            out = alias[v.strip().lower()]
+        elif numeric and _level(v):
+            out = _level(v)
+        elif k == "position_shift" and v in (0, False, None):
+            out = "none"
+        else:
+            out = default
+        repaired.append(f"{k}: {v!r} -> {out!r}")
+        return out
+
+    move = _enum("move", MOVES, "assert", _MOVE_ALIASES)
+    shift = _enum("position_shift", SHIFTS, "none")
+    unc = _enum("uncertainty", UNCERTAINTY, "medium", numeric=True)
+    addr = obj.get("addresses")
+    if not isinstance(addr, str):
+        out = "; ".join(str(a) for a in addr) if isinstance(addr, list) else ""
+        repaired.append(f"addresses: {addr!r} -> {out!r}")
+        addr = out
+    sids = obj.get("source_ids")
     if not isinstance(sids, list) or not all(isinstance(s, str) for s in sids):
-        raise ReplyInvalid("source_ids must be a list of strings")
-    if not isinstance(obj["analogy"], bool):
-        raise ReplyInvalid("analogy must be a boolean")
+        repaired.append(f"source_ids: {sids!r} -> []")
+        sids = []
+    analogy = obj.get("analogy")
+    if not isinstance(analogy, bool):
+        repaired.append(f"analogy: {analogy!r} -> False")
+        analogy = False
     verified = [s for s in sids if s in allowed_source_ids]
     unverified = [s for s in sids if s not in allowed_source_ids]
     return Reply(
-        utterance=utterance, move=move, addresses=_str("addresses"), position_shift=shift,
-        uncertainty=unc, source_ids=list(sids), analogy=obj["analogy"],
-        verified_source_ids=verified, unverified_citations=unverified,
+        utterance=utterance, move=move, addresses=addr.strip(), position_shift=shift,
+        uncertainty=unc, source_ids=list(sids), analogy=analogy,
+        verified_source_ids=verified, unverified_citations=unverified, repaired=repaired,
     )
 
 

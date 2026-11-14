@@ -112,7 +112,8 @@ class MockAdapter:
                           usage={"prompt_sha256": hashlib.sha256(user.encode()).hexdigest()[:16]})
 
 
-EFFORT_MAX_TOKENS = {"none": 900, "low": 1400, "medium": 2400, "high": 4000}
+# raised 2026-11-14: free reasoning models cut replies off mid-JSON at the old 900/1400
+EFFORT_MAX_TOKENS = {"none": 1600, "low": 2400, "medium": 3600, "high": 6000}
 RETRYABLE = (429, 500, 502, 503, 504)
 
 
@@ -201,7 +202,10 @@ class OpenAICompatAdapter:
             }
         return payload
 
+    min_timeout_s: float = 0.0   # a slow source (account bridges, agy on the VM) raises the session timeout
+
     def generate(self, messages: list[dict], params: dict, timeout_s: float, gate=None) -> Generation:
+        timeout_s = max(timeout_s, self.min_timeout_s)
         t0 = time.monotonic()
         attempts, last = 0, None
         while True:
@@ -246,6 +250,42 @@ class OpenAICompatAdapter:
                     wait = min(20.0, max(wait, ra))
                 attempts += 1
                 self._sleep(wait)
+
+
+class BackupAdapter:
+    """Owner opt-in (page checkbox, on by default): when the chosen model fails a turn after its own
+    retries, the same turn is asked of the backups in order. Never silent: the turn records
+    usage.backup_used + backup_reason and the page tags it BACKUP. The chosen model is tried first
+    again on every new turn."""
+
+    supports_gate = True
+
+    def __init__(self, primary, backups: list):
+        self.primary, self.backups = primary, list(backups)
+        self.provider, self.model = getattr(primary, "provider", "?"), getattr(primary, "model", "?")
+
+    def describe(self) -> dict:
+        d = self.primary.describe() if hasattr(self.primary, "describe") else {"model": self.model}
+        return dict(d, backups=[getattr(b, "model", "?") for b in self.backups])
+
+    def generate(self, messages, params, timeout_s, gate=None):
+        errors = []
+        for i, a in enumerate([self.primary] + self.backups):
+            if i and gate:
+                gate()
+            try:
+                if getattr(a, "supports_gate", False):
+                    g = a.generate(messages, params, timeout_s, gate=gate)
+                else:
+                    g = a.generate(messages, params, timeout_s)
+            except LLMError as e:
+                errors.append(f"{getattr(a, 'model', '?')}: {str(e)[:140]}")
+                continue
+            if i:
+                g.usage = dict(g.usage or {}, backup_used=True, chosen_model=self.model,
+                               backup_model=getattr(a, "model", g.model), backup_reason=errors[-1])
+            return g
+        raise LLMError("every model failed this turn: " + " | ".join(errors))
 
 
 def quick_test(adapter: "OpenAICompatAdapter", timeout_s: float = 30.0) -> dict:

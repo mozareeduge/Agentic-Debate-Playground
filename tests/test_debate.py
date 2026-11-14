@@ -93,10 +93,21 @@ class TestSchema(unittest.TestCase):
         self.assertEqual(r.unverified_citations, ["fake"])
 
     def test_invalid(self):
-        for raw in ["not json", reply_json(""), reply_json("x", move="win"), json.dumps({"utterance": "x"}),
-                    reply_json("x", analogy="yes")]:
+        # the spoken text is strict
+        for raw in ["not json", reply_json(""), json.dumps({"move": "assert"}), json.dumps({"utterance": 3})]:
             with self.assertRaises(ReplyInvalid):
                 parse_reply(raw, set())
+        # cue labels from free models are repaired and every repair is listed (2026-11-14 live finding:
+        # nemotron sent position_shift null / uncertainty 0.5 / move "opening" on 2 of 3 tries)
+        for raw in [reply_json("x", move="win"), json.dumps({"utterance": "x"}), reply_json("x", analogy="yes"),
+                    json.dumps({"utterance": "x", "move": "opening", "position_shift": None, "uncertainty": 0.5,
+                                "addresses": [], "source_ids": [], "analogy": None})]:
+            r = parse_reply(raw, set())
+            self.assertEqual(r.utterance, "x")
+            self.assertTrue(r.repaired)
+        r = parse_reply(json.dumps({"utterance": "x", "move": "opening", "position_shift": None, "uncertainty": 0.5,
+                                    "addresses": [], "source_ids": [], "analogy": None}), set())
+        self.assertEqual((r.move, r.position_shift, r.uncertainty, r.analogy), ("assert", "none", "medium", False))
 
     def test_trim_sentence_boundary(self):
         self.assertEqual(trim_to_words("One two three. Four five six seven.", 5), "One two three.")

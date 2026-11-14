@@ -44,7 +44,8 @@ table{border-collapse:collapse;width:100%;font-size:15px} td,th{border-bottom:1p
     <h2>1 · Your first debate <span class="min">3 min</span></h2>
     <ol>
       <li>Double-click <b>START-DEBATE</b>. A page opens in your browser.</li>
-      <li>Look at <b>1 · Is everything ready?</b> You want green dots on <b>Kilo · free</b>, <b>Voices</b> and <b>Speakers</b>.</li>
+      <li>Look at <b>1 · Is everything ready?</b> You want green dots on <b>Voices</b> and <b>Speakers</b>. Wait ~30 s for “Models answering now: N”: the page tests every free model and moves A and B onto a ✓ one.</li>
+      <li>Optional: under each performer pick <b>Source</b> → <i>Your accounts</i> (Claude WORK, Antigravity) or <i>Free models</i>, then model and effort.</li>
       <li>Press the big <b>Start</b> at the top.</li>
     </ol>
     <div class="see"><b>You should see:</b> “Preparing: 1 of 2 voices ready · sound starts in about N s”. After about 20–40 seconds David speaks, then Zira answers, turn after turn, with a short silence between them. The counters show <i>written</i> running ahead of <i>heard</i>.</div>
@@ -57,9 +58,9 @@ table{border-collapse:collapse;width:100%;font-size:15px} td,th{border-bottom:1p
     <h2>2 · “Preparing…” and nothing plays <span class="min">2 min</span></h2>
     <ol>
       <li>Wait: it starts by itself after at most 90 seconds (the page shows the countdown).</li>
-      <li>If a red <b>What went wrong</b> line appears: press <b>Test</b> next to each model, pick one that says “Answers now”, then press <b>Start</b> again. Free models change from hour to hour.</li>
+      <li>If a red <b>What went wrong</b> line appears: press <b>Refresh</b>, pick a ✓ model, then press <b>Start</b> again. Free models change from hour to hour.</li>
     </ol>
-    <div class="see"><b>Why:</b> free models are sometimes slow or busy. The debate never swaps the model behind your back; it tells you.</div>
+    <div class="see"><b>Why:</b> free models are sometimes slow or busy. With the <b>backup</b> box ticked (default), a dying free model hands that turn to a ✓ free model and the transcript marks it <b>backup model</b>. Your Claude / Antigravity accounts are never used as a backup.</div>
     <p class="src">Source: <a data-adhd="source" href="http://127.0.0.1:4797/">Debate page · section 3 “Now”</a></p>
     <div class="tick"><input type="checkbox" id="t2"><label for="t2">Checked</label><input type="text" id="n2" placeholder="note"></div>
   </div>
@@ -76,8 +77,9 @@ table{border-collapse:collapse;width:100%;font-size:15px} td,th{border-bottom:1p
   </div>
 
   <div class="card" data-adhd="item" id="c4">
-    <h2>4 · A source says “needs key” or “offline” <span class="min">0 min</span></h2>
-    <p>Nothing to do now: Kilo · free works without a key. <b>OpenCode Zen</b> and <b>Cline</b> free lanes need the 9router key; <b>LM Studio</b> and <b>Ollama</b> appear by themselves when you open them.</p>
+    <h2>4 · A source says “not signed in” or “offline” <span class="min">2 min, once</span></h2>
+    <p><b>Claude Code · personal account</b> needs one sign-in: double-click <code>C:\Users\Zarinpal\Documents\08 Agents\nanobot-hub\scripts\personal-login.cmd</code>, type <b>/login</b>, pick “Claude account with subscription”, finish in the browser, type <b>/exit</b>. It uses its own login folder, never your normal personal Claude. Then press Refresh.</p>
+    <p>Already working: <b>Claude WORK</b>, <b>Antigravity</b>, <b>OpenRouter free</b>, Kilo free (daily limit). <b>Groq</b> is blocked from this network. <b>LM Studio</b> / <b>Ollama</b> appear when you open them. Keys are read from Hermes’ settings, never copied.</p>
     <p class="src">Source: <a data-adhd="source" href="https://github.com/mozareeduge/Agentic-Debate-Playground/blob/ccr-18cb2ef2-x3dzio/config/sources.example.json">The list of model sources</a></p>
     <div class="tick"><input type="checkbox" id="t4"><label for="t4">Understood</label><input type="text" id="n4" placeholder="note"></div>
   </div>

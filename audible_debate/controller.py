@@ -318,7 +318,7 @@ class Controller:
                          "duration_s": t.get("duration_s"), "write_s": t.get("write_s"),
                          "voice_s": t.get("voice_s"), "undesigned_wait_s": t.get("undesigned_wait_s"),
                          "speech_like": (t.get("audio_analysis") or {}).get("speech_like"),
-                         "flags": [f for f in ("trimmed", "served_mismatch", "context_shortened_after_reply") if t.get(f)]})
+                         "flags": [f for f in ("trimmed", "served_mismatch", "context_shortened_after_reply", "backup_model", "labels_repaired") if t.get(f)]})
         return {"session_id": self.store.session_id if self.store else None,
                 "session_dir": str(self.store.dir) if self.store else None,
                 "state": self.state, "phase": self.phase, "stages": dict(self.stages),
@@ -513,6 +513,14 @@ class Controller:
         turn.update(provider=gen.provider, model=gen.model, llm_params=gen.params, gen_latency_s=gen.latency_s,
                     usage=usage, raw_output=gen.raw, chosen_model=chosen, served_model=gen.model,
                     router=bool(usage.get("router")), served_mismatch=mismatch)
+        if usage.get("backup_used"):
+            turn["served_mismatch"] = False
+            turn["backup_model"] = True
+            self._emit("backup_used", turn_id=turn_id, chosen=usage.get("chosen_model"),
+                       backup=usage.get("backup_model"), reason=usage.get("backup_reason"))
+        if reply.repaired:
+            turn["labels_repaired"] = True
+            self._emit("labels_repaired", turn_id=turn_id, repairs=reply.repaired)
         turn["original_utterance"] = reply.utterance
         if word_count(reply.utterance) > budget:
             reply.utterance = trim_to_words(reply.utterance, budget)

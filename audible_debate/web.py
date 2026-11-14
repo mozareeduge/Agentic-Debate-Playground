@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -66,6 +67,36 @@ class App:
             self._sources_cache = (time.monotonic(), discover_all(timeout_s=4.0))
         return [MOCK_SOURCE] + self._sources_cache[1]
 
+    def live_models(self, refresh: bool = False) -> dict:
+        """Ask every listed free model once (in parallel, no retries) so the page can mark which answer now.
+        Cached for 5 minutes: free models change hour to hour, but not second to second."""
+        from concurrent.futures import ThreadPoolExecutor
+        cached = getattr(self, "_live_cache", None)
+        if cached and not refresh and time.monotonic() - cached[0] < 300:
+            return cached[1]
+        srcs = {s.id: s for s in load_sources()}
+        # paid accounts (Claude, Antigravity) are never swept: each probe would spend his limits
+        jobs = [(s["id"], m["id"]) for s in self.sources(refresh) if s["id"] in srcs and s.get("status") == "ok"
+                and srcs[s["id"]].probe and srcs[s["id"]].kind != "account" for m in s.get("models", [])]
+
+        def probe(job):
+            sid, mid = job
+            try:
+                r = quick_test(OpenAICompatAdapter.from_source(srcs[sid], mid, effort="none"), timeout_s=25.0)
+            except Exception as e:  # noqa: BLE001
+                r = {"ok": False, "seconds": 0.0, "note": str(e)[:160]}
+            return sid, mid, r
+
+        results: dict = {}
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for sid, mid, r in ex.map(probe, jobs):
+                results.setdefault(sid, {})[mid] = {"ok": bool(r.get("ok")), "seconds": r.get("seconds"),
+                                                    "note": r.get("note", "")}
+        out = {"checked_at": time.strftime("%H:%M"), "results": results,
+               "live": sum(1 for v in results.values() for r in v.values() if r["ok"]), "total": len(jobs)}
+        self._live_cache = (time.monotonic(), out)
+        return out
+
     def voices(self) -> dict:
         lv = list_voices(LM_URL)
         lv["voices"] = lv["voices"] + [PLACEHOLDER_VOICE]
@@ -101,7 +132,31 @@ class App:
         effort = perf.get("effort", "none")
         if effort not in EFFORTS:
             raise ValueError(f"effort must be one of {EFFORTS}")
-        return OpenAICompatAdapter.from_source(src, perf["model"], effort=effort)
+        model = perf["model"]
+        if src.effort_in_model:
+            # Antigravity: effort is the model-name suffix; the API gets no reasoning_effort
+            base = re.sub(r"-(x?high|medium|low)$", "", model)
+            want = f"{base}-{'low' if effort == 'none' else effort}"
+            listed = {m["id"] for s in self.sources() if s["id"] == src.id for m in s.get("models", [])}
+            model = want if (not listed or want in listed) else model
+            primary = OpenAICompatAdapter.from_source(src, model, effort="none")
+            perf["model"], perf["effort_note"] = model, f"effort {effort} sent as model name {model}"
+        else:
+            primary = OpenAICompatAdapter.from_source(src, model, effort=effort)
+        primary.min_timeout_s = float(src.timeout_s or 0)
+        if not perf.get("backup", True):
+            return primary
+        # backups: models that answered the last live check, fastest first (same source first)
+        live = self.live_models().get("results", {})   # cached 5 min; runs once if the page never asked
+        srcs = {s.id: s for s in load_sources()}
+        ranked = sorted(((sid, mid, r["seconds"]) for sid, ms in live.items() for mid, r in ms.items()
+                         if r["ok"] and mid != perf["model"] and sid in srcs and srcs[sid].kind != "account"),
+                        key=lambda x: (x[0] != src.id, x[2]))[:2]
+        if not ranked:
+            return primary
+        from .llm import BackupAdapter
+        return BackupAdapter(primary, [OpenAICompatAdapter.from_source(srcs[sid], mid, effort=effort)
+                                       for sid, mid, _ in ranked])
 
     @staticmethod
     def _tts(perf: dict):
@@ -131,7 +186,7 @@ class App:
                 gap_seconds=float(body.get("gap_seconds", 1.5)), lookahead=int(body.get("lookahead", 3)),
                 preroll_min=int(body.get("preroll_min", 2)), max_preroll_s=float(body.get("max_preroll_s", 90)),
                 language=body.get("language", "en"), llm_timeout_s=float(body.get("llm_timeout_s", 60)),
-                performers={k: {kk: perfs[k].get(kk) for kk in ("source", "model", "effort", "voice", "wps")}
+                performers={k: {kk: perfs[k].get(kk) for kk in ("source", "model", "effort", "voice", "wps", "backup")}
                             for k in ("A", "B")},
                 knowledge={"A": KnowledgeProfile("none"), "B": KnowledgeProfile("none")})
             self.ctl = Controller(llm, tts, _player(mode), sessions_root=SESSIONS)
@@ -221,6 +276,8 @@ def make_handler(app: App):
                     return self._send(200, app.sources("refresh=1" in q))
                 if path == "/api/voices":
                     return self._send(200, app.voices())
+                if path == "/api/models/live":
+                    return self._send(200, app.live_models("refresh=1" in q))
                 if path == "/api/status":
                     return self._send(200, app.status())
                 if path == "/api/efforts":

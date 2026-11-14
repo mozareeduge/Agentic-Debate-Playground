@@ -30,3 +30,11 @@ No GPU on this host. Line Machine Persian voices: 1.3–9.3 s per turn on CPU; E
 - A Persian test sent from the command line arrived as `????` (Windows command-line encoding in the *test tool*, not the product). The model said the question was unreadable. Re-run through a UTF-8 client: correct. The page sends UTF-8.
 - `metrics` crashed on Persian turn files (read without UTF-8 on Windows). Fixed.
 - Two Kilo free models returned no content to the debate prompt; the adapter retries the same model, then reports the error (never substitutes).
+
+## Update 2026-11-14 (morning): first complete debates
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 7 | Six-turn live debate, silent clock, OpenRouter free `nvidia/nemotron-3.5-super-vl:free` effort low, backup on | **completed 6/6**, all real speech; turns 27-33 s; max wait after turn 1 4.8 s, one 26.5 s wait on turn 6 (free model 73.6 s to write); 2 turns finished by backup `cohere/north-mini-code:free`, tagged backup_model | `sessions/20261114T085659Z-520fd5` |
+| 8 | Accounts: A = Claude WORK `claude-haiku-5-5` low, B = Antigravity `gemini-3.8-flash` low (effort sent as model-name suffix) | **completed 2/2**, real speech; write 4.0 s / 9.6 s | `sessions/20261114T090156Z-9218b6` |
+
+Failures seen and fixed on the way: free model 502 mid-debate (opt-in labelled backup added); malformed side labels (null / numbers / "opening") repaired and tagged, spoken text still strict; replies cut off after a complete utterance (salvaged, max_tokens raised); Kilo anonymous daily limit (429 PROMOTION_MODEL_LIMIT_REACHED). Groq answers 403 / Cloudflare 1010 from this network. Personal Claude lane: never signed in (needs his one login). Tests: 44 pass.

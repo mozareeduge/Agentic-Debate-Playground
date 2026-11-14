@@ -42,6 +42,11 @@ class Source:
     local: bool = False
     note: str = ""
     preferred_models: list = field(default_factory=list)
+    kind: str = "free"            # free | account (a paid subscription: never auto-probed, never a backup)
+    probe: bool = True            # include in the page's "test every model" sweep
+    timeout_s: float = 0          # per-request timeout override (0 = session default)
+    login: str = ""               # a launcher that signs this source in (shown when it is offline)
+    effort_in_model: bool = False  # effort is a model-name suffix (-low/-medium/-high), e.g. Antigravity
 
     def api_key(self) -> str | None:
         if self.key_env and os.environ.get(self.key_env):
@@ -56,14 +61,16 @@ class Source:
     def public(self) -> dict:
         return {"id": self.id, "label": self.label, "base_url": self.base_url, "local": self.local,
                 "key_env": self.key_env, "needs_key": self.needs_key(), "has_key": bool(self.api_key()),
-                "note": self.note, "preferred_models": list(self.preferred_models)}
+                "note": self.note, "preferred_models": list(self.preferred_models), "kind": self.kind,
+                "effort_in_model": self.effort_in_model, "login": self.login}
 
 
 def _read_key_file(spec: str, name: str | None) -> str | None:
     path, _, var = spec.partition("#")
     if path.startswith("dotenv:"):
         path = path[len("dotenv:"):]
-    var = var or name
+        var = var or name
+    # a plain path (no dotenv:, no #NAME) is a one-line key file
     try:
         text = Path(os.path.expandvars(os.path.expanduser(path))).read_text(encoding="utf-8")
     except OSError:
@@ -133,7 +140,9 @@ def discover_source(source: Source, timeout_s: float = 4.0) -> dict:
         out["reason"] = str(getattr(e, "reason", e))[:120]
         out["models"] = []
         if out.get("status") != "needs_key":
-            out.update(status="offline", action="Start that program (or ignore this source).")
+            act = (f"Not signed in or not started. Double-click {source.login} once and sign in, then press Refresh."
+                   if source.login else "Start that program (or ignore this source).")
+            out.update(status="offline", action=act)
         return out
     listed = []
     for m in models:

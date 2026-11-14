@@ -79,6 +79,7 @@ details summary{cursor:pointer;color:var(--muted)}
       <button id="btnStopServer" title="Stops any sound, saves, and closes the background server">Stop server</button>
       <span class="note">The debate runs in the background on this computer. Closing this tab does not stop the sound — use Stop.</span>
     </div>
+    <div id="livePill" class="health" style="margin-top:8px"></div>
     <div id="healthActions" class="note"></div>
   </section>
 
@@ -143,7 +144,39 @@ const api = async (path, body) => {
   return j;
 };
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let SOURCES = [], VOICES = [], EFFORTS = ["none","low","medium","high"], STATUS = {};
+let SOURCES = [], VOICES = [], EFFORTS = ["none","low","medium","high"], STATUS = {}, LIVE = null;
+const liveOf = (sid, mid) => sid==="mock" ? {ok:true, seconds:0} : (LIVE?.results?.[sid]?.[mid] || null);
+function bestLive(sid){
+  const r = LIVE?.results?.[sid] || {};
+  return Object.entries(r).filter(([,v]) => v.ok).sort((a,b) => a[1].seconds - b[1].seconds).map(([k]) => k)[0];
+}
+function markModels(key){
+  const sid = $("#src"+key).value;
+  [...$("#model"+key).options].forEach(o => {
+    const l = liveOf(sid, o.value), base = o.dataset.label || (o.dataset.label = o.textContent);
+    o.textContent = (l ? (l.ok ? "✓ " : "✗ ") : "") + base + (l && l.ok && sid!=="mock" ? `  · ${l.seconds} s` : "") + (l && !l.ok ? "  · not answering" : "");
+  });
+  const cur = liveOf(sid, $("#model"+key).value), out = $("#mchk"+key);
+  if (cur && sid!=="mock"){ out.className = "vchk " + (cur.ok?"ok":"bad"); out.textContent = cur.ok ? `✓ Answered at ${LIVE.checked_at}, in ${cur.seconds} s` : `✗ Not answering (checked ${LIVE.checked_at}). Pick a ✓ model.`; }
+}
+function pickLive(key){
+  // keep his choice if it answers; otherwise move to the fastest live model (any working source)
+  const sid = $("#src"+key).value, cur = liveOf(sid, $("#model"+key).value);
+  const isAcct = (SOURCES.find(x => x.id===sid)||{}).kind === "account";
+  if (!LIVE || isAcct || (cur && cur.ok)) return markModels(key);  // his account choice is never moved
+  let s = sid, m = bestLive(sid);
+  if (!m) for (const x of SOURCES) { const b = bestLive(x.id); if (b){ s = x.id; m = b; break; } }
+  if (m){ $("#src"+key).value = s; fillModels(key, m); }
+  markModels(key);
+}
+async function loadLive(refresh){
+  $("#livePill").textContent = "Testing every free model once (about 30 s)…";
+  try{
+    LIVE = await api("/api/models/live"+(refresh?"?refresh=1":""));
+    $("#livePill").innerHTML = `<span class="pill ${LIVE.live?"ok":"bad"}"><span class="dot"></span>Models answering now: ${LIVE.live} of ${LIVE.total} (checked ${LIVE.checked_at})</span>`;
+    ["A","B"].forEach(pickLive); save();
+  }catch(e){ $("#livePill").textContent = "Model check failed: " + e.message; }
+}
 const store = {get(k,d){try{return JSON.parse(localStorage.getItem("debate:"+k)) ?? d}catch{return d}}, set(k,v){try{localStorage.setItem("debate:"+k, JSON.stringify(v))}catch{}}};
 
 function perfCard(key){
@@ -153,14 +186,17 @@ function perfCard(key){
     <label for="model${key}">Model (free)</label>
     <div class="controls" style="flex-wrap:nowrap"><select id="model${key}"></select><button type="button" id="test${key}" title="Send one tiny request to see if this model answers right now">Test</button></div>
     <div class="vchk" id="mchk${key}"></div>
+    <label style="font-weight:normal"><input type="checkbox" id="bk${key}" checked> If this model stops answering mid-debate, let a ✓ backup model finish the turn (marked BACKUP)</label>
     <label>Thinking effort</label><div class="seg" id="eff${key}" role="group" aria-label="Effort ${key}"></div>
+    <div class="note" id="effnote${key}"></div>
     <label for="voice${key}">Voice</label><select id="voice${key}"></select>
     <div class="vchk" id="vchk${key}"></div>`;
   $("#eff"+key).innerHTML = EFFORTS.map(e => `<button type="button" data-e="${e}" aria-pressed="false">${e}</button>`).join("");
   $("#eff"+key).onclick = ev => { const b = ev.target.closest("button"); if(!b) return; setEffort(key, b.dataset.e); save(); };
-  $("#src"+key).onchange = () => { fillModels(key); save(); };
-  $("#model"+key).onchange = () => { $("#mchk"+key).textContent = ""; save(); };
+  $("#src"+key).onchange = () => { fillModels(key, bestLive($("#src"+key).value)); markModels(key); save(); };
+  $("#model"+key).onchange = () => { $("#mchk"+key).textContent = ""; markModels(key); save(); };
   $("#test"+key).onclick = () => testModel(key);
+  $("#bk"+key).onchange = save;
   $("#voice"+key).onchange = () => { checkVoice(key); save(); };
 }
 function setEffort(key, e){ document.querySelectorAll(`#eff${key} button`).forEach(b => b.setAttribute("aria-pressed", String(b.dataset.e===e))); }
@@ -168,13 +204,16 @@ function getEffort(key){ return document.querySelector(`#eff${key} button[aria-p
 
 function fillSources(key, want){
   const sel = $("#src"+key);
-  sel.innerHTML = SOURCES.map(s => {
-    const n = (s.models||[]).length, st = s.status;
-    const tag = st==="ok" ? `${n} free model${n===1?"":"s"}` : st==="needs_key" ? "needs key" : st==="offline" ? "offline" : st;
-    return `<option value="${esc(s.id)}" ${st!=="ok"?"disabled":""}>${esc(s.label)} — ${esc(tag)}</option>`;
-  }).join("");
+  const opt = s => {
+    const n = (s.models||[]).length, st = s.status, acct = s.kind==="account";
+    const tag = st==="ok" ? `${n} model${n===1?"":"s"}${acct?" · uses your limits":" free"}` : st==="needs_key" ? "needs key" : st==="offline" ? (s.login?"not signed in":"offline") : st;
+    return `<option value="${esc(s.id)}" ${st!=="ok"?"disabled":""} title="${esc(s.action||s.note||"")}">${esc(s.label)} — ${esc(tag)}</option>`;
+  };
+  const acc = SOURCES.filter(s => s.kind==="account"), free = SOURCES.filter(s => s.kind!=="account");
+  sel.innerHTML = `<optgroup label="Your accounts (Claude, Antigravity)">${acc.map(opt).join("")}</optgroup>` +
+                  `<optgroup label="Free models">${free.map(opt).join("")}</optgroup>`;
   const ok = SOURCES.filter(s => s.status==="ok");
-  const pick = SOURCES.find(s => s.id===want && s.status==="ok") || ok.find(s => s.id!=="mock") || ok[0];
+  const pick = SOURCES.find(s => s.id===want && s.status==="ok") || ok.find(s => s.id!=="mock" && s.kind!=="account") || ok[0];
   if (pick) sel.value = pick.id;
   fillModels(key);
 }
@@ -185,6 +224,9 @@ function fillModels(key, want){
   const ids = (s.models||[]).map(m => m.id);
   const pref = (s.preferred_models||[]).find(m => ids.includes(m));
   if (want && ids.includes(want)) sel.value = want; else if (pref) sel.value = pref;
+  const n = $("#effnote"+key);
+  if (n) n.textContent = s.effort_in_model ? "Antigravity: effort picks the model's -low / -medium / -high version (none = low)."
+    : s.kind==="account" ? "Uses your subscription limits. Not auto-tested; press Test once." : "";
 }
 function fillVoices(key, want){
   const lang = $("#language").value;
@@ -223,8 +265,8 @@ async function checkVoice(key){
 function save(){
   store.set("form", {question:$("#question").value, language:$("#language").value, turns:$("#turns").value, mode:$("#mode").value,
     ceiling:$("#ceiling").value, gap:$("#gap").value, preroll:$("#preroll").value, lookahead:$("#lookahead").value, maxpre:$("#maxpre").value,
-    A:{src:$("#srcA").value, model:$("#modelA").value, eff:getEffort("A"), voice:$("#voiceA").value},
-    B:{src:$("#srcB").value, model:$("#modelB").value, eff:getEffort("B"), voice:$("#voiceB").value}});
+    A:{src:$("#srcA").value, model:$("#modelA").value, eff:getEffort("A"), voice:$("#voiceA").value, bk:$("#bkA").checked},
+    B:{src:$("#srcB").value, model:$("#modelB").value, eff:getEffort("B"), voice:$("#voiceB").value, bk:$("#bkB").checked}});
 }
 
 async function loadHealth(refresh){
@@ -242,15 +284,17 @@ async function loadHealth(refresh){
   $("#btnStartVoices").hidden = voices.status === "up";
   const acts = [];
   if (voices.status !== "up") acts.push("Voices are off → press <b>Start voices</b>, wait about a minute, then press Refresh.");
+  srcs.filter(s => s.login && s.status!=="ok").forEach(s => acts.push(`${esc(s.label)} is not signed in. One time: double-click <b>${esc(s.login.split("/").pop())}</b> in <code>${esc(s.login.replace(/\/[^/]+$/,"").replaceAll("/","\\"))}</code>, sign in with that account, then press Refresh.`));
   const keyed = srcs.filter(s => s.status==="needs_key");
   if (keyed.length) acts.push(`${keyed.map(s => esc(s.label)).join(" and ")} need a key (${esc(keyed[0].key_env)}). Ask Jimmy to connect it. Everything else works without it.`);
   if (!okSrc.length) acts.push("No live model source → open Kilo / LM Studio, then press Refresh. You can still rehearse with the offline script.");
   $("#healthActions").innerHTML = acts.map(a => "• " + a).join("<br>");
   const f = store.get("form", {});
-  ["A","B"].forEach(k => { fillSources(k, f[k]?.src); fillModels(k, f[k]?.model); fillVoices(k, f[k]?.voice); setEffort(k, f[k]?.eff || "none"); });
+  ["A","B"].forEach(k => { fillSources(k, f[k]?.src); fillModels(k, f[k]?.model); fillVoices(k, f[k]?.voice); setEffort(k, f[k]?.eff || "none"); $("#bk"+k).checked = f[k]?.bk ?? true; });
   // same model for both performers first (owner rule)
   if (!f.B) { $("#srcB").value = $("#srcA").value; fillModels("B", $("#modelA").value); }
   checkVoice("A"); checkVoice("B");
+  loadLive(refresh);
 }
 
 async function start(){
@@ -259,8 +303,8 @@ async function start(){
   const body = {question:$("#question").value, language:$("#language").value, turns:+$("#turns").value, mode:$("#mode").value,
     max_turn_seconds:+$("#ceiling").value, gap_seconds:+$("#gap").value, preroll_min:+$("#preroll").value,
     lookahead:+$("#lookahead").value, max_preroll_s:+$("#maxpre").value,
-    performers:{A:{source:$("#srcA").value, model:$("#modelA").value, effort:getEffort("A"), voice:$("#voiceA").value},
-                B:{source:$("#srcB").value, model:$("#modelB").value, effort:getEffort("B"), voice:$("#voiceB").value}}};
+    performers:{A:{source:$("#srcA").value, model:$("#modelA").value, effort:getEffort("A"), voice:$("#voiceA").value, backup:$("#bkA").checked},
+                B:{source:$("#srcB").value, model:$("#modelB").value, effort:getEffort("B"), voice:$("#voiceB").value, backup:$("#bkB").checked}}};
   try{ await api("/api/session", body); render(await api("/api/action", {action:"start"})); }
   catch(e){ $("#error").textContent = e.message; }
 }

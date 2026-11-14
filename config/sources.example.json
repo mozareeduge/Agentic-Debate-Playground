@@ -1,6 +1,81 @@
 {
-  "_comment": "Free model sources. Copy to config/sources.json (gitignored) to change it locally. No keys here: keys come from key_env or key_file.",
+  "_comment": "Model sources. Copy to config/sources.json (gitignored) to change locally. No keys here: only pointers (key_env / key_file) to where keys already live.",
   "sources": [
+    {
+      "id": "claude-work",
+      "label": "Claude Code · WORK account",
+      "base_url": "http://127.0.0.1:4804/v1",
+      "key_env": "DEBATE_CLAUDE_BRIDGE_TOKEN",
+      "key_file": "C:/Users/Zarinpal/.nanobot-hub/token",
+      "free": "all",
+      "kind": "account",
+      "probe": false,
+      "timeout_s": 180,
+      "note": "Your WORK Claude subscription through the hub bridge. Uses your 5-hour and weekly limit.",
+      "preferred_models": [
+        "claude-sonnet-5-5",
+        "claude-haiku-5-5",
+        "claude-opus-5-5"
+      ]
+    },
+    {
+      "id": "claude-personal",
+      "label": "Claude Code · personal account",
+      "base_url": "http://127.0.0.1:4806/v1",
+      "key_env": "DEBATE_CLAUDE_BRIDGE_TOKEN",
+      "key_file": "C:/Users/Zarinpal/.nanobot-hub/token",
+      "free": "all",
+      "kind": "account",
+      "probe": false,
+      "timeout_s": 180,
+      "login": "C:/Users/Zarinpal/Documents/08 Agents/nanobot-hub/scripts/personal-login.cmd",
+      "note": "Your personal Claude subscription (its own hub login folder, never your normal personal Claude home).",
+      "preferred_models": [
+        "claude-sonnet-5-5",
+        "claude-haiku-5-5",
+        "claude-opus-5-5"
+      ]
+    },
+    {
+      "id": "antigravity",
+      "label": "Antigravity (agy, runs on the VM)",
+      "base_url": "http://127.0.0.1:4803/v1",
+      "key_env": "AGY_BRIDGE_API_KEY",
+      "key_file": "dotenv:C:/Users/Zarinpal/AppData/Local/hermes/profiles/work/.env#AGY_BRIDGE_API_KEY",
+      "free": "all",
+      "kind": "account",
+      "probe": false,
+      "timeout_s": 240,
+      "effort_in_model": true,
+      "note": "Your Google AI Pro account through agy on the VM. Effort is part of the model name (…-low/-medium/-high). Slower: 20-60 s per turn.",
+      "preferred_models": [
+        "gemini-3.8-flash-medium",
+        "gemini-3.8-flash-low"
+      ]
+    },
+    {
+      "id": "groq",
+      "label": "Groq · free tier",
+      "base_url": "https://api.groq.com/openai/v1",
+      "key_env": "GROQ_API_KEY",
+      "key_file": "dotenv:C:/Users/Zarinpal/AppData/Local/hermes/profiles/work/.env#GROQ_API_KEY",
+      "free": "all",
+      "note": "Blocked from this network (HTTP 403, Cloudflare 1010). Kept for when a VPN route is on.",
+      "probe": false
+    },
+    {
+      "id": "openrouter-free",
+      "label": "OpenRouter · free models",
+      "base_url": "https://openrouter.ai/api/v1",
+      "key_env": "OPENROUTER_API_KEY",
+      "key_file": "dotenv:C:/Users/Zarinpal/AppData/Local/hermes/profiles/work/.env#OPENROUTER_API_KEY",
+      "free": {
+        "suffix": [
+          ":free"
+        ]
+      },
+      "note": "Only models ending in :free (price 0)."
+    },
     {
       "id": "kilo-free",
       "label": "Kilo · free",
@@ -30,7 +105,8 @@
           "-free"
         ]
       },
-      "note": "9router lane; needs the 9router key."
+      "note": "9router lane; key read at runtime from Hermes WORK settings (never copied).",
+      "key_file": "dotenv:C:/Users/Zarinpal/AppData/Local/hermes/profiles/work/.env#HERMES_CUSTOM_ROUTER_API_KEY"
     },
     {
       "id": "cline-free",
@@ -46,7 +122,8 @@
           "cl/cline-free/nemotron-3.5-super-vl"
         ]
       },
-      "note": "9router lane; needs the 9router key."
+      "note": "9router lane; key read at runtime from Hermes WORK settings (never copied).",
+      "key_file": "dotenv:C:/Users/Zarinpal/AppData/Local/hermes/profiles/work/.env#HERMES_CUSTOM_ROUTER_API_KEY"
     },
     {
       "id": "lmstudio",
